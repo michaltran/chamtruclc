@@ -9,10 +9,31 @@ const prisma = new PrismaClient();
 const createScheduleSchema = z.object({
   userId: z.string().uuid(),
   departmentId: z.string().uuid(),
-  shiftTypeId: z.string().uuid(),
+  shiftTypeId: z.string().uuid().optional(),
   shiftDate: z.string(),
   note: z.string().optional(),
 });
+
+async function getDefaultShiftType(prisma: PrismaClient) {
+  let st = await prisma.shiftType.findFirst({ where: { code: 'T' } });
+  if (!st) {
+    st = await prisma.shiftType.create({
+      data: {
+        code: 'T',
+        name: 'Thường trực',
+        startTime: new Date('1970-01-01T17:00:00Z'),
+        endTime: new Date('1970-01-02T08:00:00Z'),
+        durationHours: 15,
+        baseAmount: 0,
+        weekendCoef: 1.5,
+        holidayCoef: 2.0,
+        color: '#3B82F6',
+        isActive: true,
+      },
+    });
+  }
+  return st;
+}
 
 /**
  * GET /api/schedules?year=2026&month=5&departmentId=...
@@ -76,11 +97,12 @@ router.post(
     }
 
     try {
+      const shiftTypeId = data.shiftTypeId || (await getDefaultShiftType(prisma)).id;
       const schedule = await prisma.schedule.create({
         data: {
           userId: data.userId,
           departmentId: data.departmentId,
-          shiftTypeId: data.shiftTypeId,
+          shiftTypeId,
           shiftDate: new Date(data.shiftDate),
           note: data.note,
           isWeekend: [0, 6].includes(new Date(data.shiftDate).getDay()),
@@ -136,11 +158,12 @@ router.post(
         continue;
       }
       try {
+        const shiftTypeId = item.shiftTypeId || (await getDefaultShiftType(prisma)).id;
         const s = await prisma.schedule.create({
           data: {
             userId: item.userId,
             departmentId: item.departmentId,
-            shiftTypeId: item.shiftTypeId,
+            shiftTypeId,
             shiftDate: new Date(item.shiftDate),
             isWeekend: [0, 6].includes(new Date(item.shiftDate).getDay()),
             createdById: req.user!.id,

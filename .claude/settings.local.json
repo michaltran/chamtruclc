@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'fix: resolve TypeScript build errors in route handlers' --body ' *)",
+      "PowerShell($env:GITHUB_TOKEN)",
+      "Bash(git credential *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(psql -U duty_user -d duty_roster -c \"SELECT username, full_name, role, is_active FROM users LIMIT 10;\")",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import bcrypt; h=bcrypt.hashpw\\(b'Truc@2026', bcrypt.gensalt\\(10\\)\\).decode\\(\\); print\\(h\\)\")"
+    ]
+  }
+}
