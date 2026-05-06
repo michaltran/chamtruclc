@@ -55,6 +55,21 @@ export default function UsersPage() {
     load()
   }
 
+  const handleGrantLogin = async (u: any) => {
+    const password = prompt(`Cấp quyền đăng nhập cho ${u.fullName}\n\nMật khẩu mới (tối thiểu 6 ký tự):`)
+    if (!password || password.length < 6) return
+    const role = prompt('Vai trò: admin / department_lead / staff', 'staff') as any
+    if (!['admin','department_lead','staff'].includes(role)) { alert('Vai trò không hợp lệ'); return }
+    try { await userApi.grantLogin(u.id, { password, role }); alert('Đã cấp quyền đăng nhập'); load() }
+    catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  const handleRevokeLogin = async (u: any) => {
+    if (!confirm(`Thu hồi quyền đăng nhập của ${u.fullName}? Tài khoản sẽ không đăng nhập được nữa.`)) return
+    try { await userApi.revokeLogin(u.id); load() }
+    catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
   const roleLabel: Record<string,string> = { admin:'Quản trị', department_lead:'Trưởng khoa', staff:'Nhân viên' }
   const roleBadge: Record<string,string> = { admin:'bg-purple-100 text-purple-800', department_lead:'bg-blue-100 text-blue-800', staff:'bg-gray-100 text-gray-700' }
 
@@ -77,7 +92,7 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  {['Họ tên','Tên đăng nhập','Mã NV','Khoa/Phòng','Chức vụ','Vai trò','Thao tác'].map(h=>(
+                  {['Họ tên','Tên đăng nhập','Mã NV','Khoa/Phòng','Chức vụ','Vai trò','Đăng nhập','Thao tác'].map(h=>(
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -96,8 +111,24 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
+                      {u.canLogin ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          ✓ Đã cấp
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs">
+                          Chưa cấp
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2 flex-wrap">
                         <button onClick={()=>handleEdit(u)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Sửa</button>
+                        {u.canLogin ? (
+                          <button onClick={()=>handleRevokeLogin(u)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Thu hồi login</button>
+                        ) : (
+                          <button onClick={()=>handleGrantLogin(u)} className="text-green-600 hover:text-green-800 text-xs font-medium">Cấp login</button>
+                        )}
                         <button onClick={()=>handleDelete(u.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Xóa</button>
                       </div>
                     </td>

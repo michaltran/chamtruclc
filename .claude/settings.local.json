@@ -32,7 +32,14 @@
       "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/schedule.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/schedule.routes.ts\")",
       "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/swap.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/swap.routes.ts\")",
       "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/server.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/server.ts\")",
-      "Bash(curl -s http://localhost:4000/health)"
+      "Bash(curl -s http://localhost:4000/health)",
+      "Bash(git rm *)",
+      "Bash(git stash *)",
+      "Bash(rm -f backend/src/routes/swap.routes.ts)",
+      "Bash(curl -s http://localhost:4000/api/swaps -H \"Content-Type: application/json\")",
+      "Bash('C:/Program Files/PostgreSQL/18/bin/psql.exe' -h localhost -U duty_user -d duty_roster -c ' *)",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/auth.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/auth.routes.ts\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/user.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/user.routes.ts\")"
     ]
   }
 }

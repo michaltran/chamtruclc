@@ -7,8 +7,17 @@ import { getDaysInMonth, format } from 'date-fns'
 import { vi } from 'date-fns/locale'
 
 const DEPT_ORDER = [
-  'LANHDAO','CC','HS','NGOAI','GAYME','SAN','NOI','NHI','YHCT','LCK','CDHA','XN','VIENPI','NHATHUOC','LAIXE'
+  'CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
+
+const titleRank = (title?: string) => {
+  if (!title) return 99
+  const t = title.toLowerCase()
+  if (t.includes('bác sĩ') || t === 'bs') return 0
+  if (t.includes('lãnh đạo')) return 1
+  if (t.includes('điều dưỡng') || t.includes('hộ sinh') || t.includes('kỹ thuật')) return 2
+  return 50
+}
 
 const SHIFT_CODE_COLORS: Record<string, string> = {
   T: 'bg-blue-100 text-blue-800',
@@ -165,9 +174,13 @@ export default function ChamTrucPage() {
               const dutyUserIds = new Set(
                 schedules.filter(s => s.departmentId === dept.id).map(s => s.userId)
               )
-              const allDeptUsers = allUsers.filter(u =>
-                u.departmentId === dept.id || dutyUserIds.has(u.id)
-              )
+              const allDeptUsers = allUsers
+                .filter(u => u.departmentId === dept.id || dutyUserIds.has(u.id))
+                .sort((a, b) => {
+                  const ra = titleRank(a.title), rb = titleRank(b.title)
+                  if (ra !== rb) return ra - rb
+                  return (a.fullName||'').localeCompare(b.fullName||'')
+                })
               if (allDeptUsers.length === 0) return null
 
               return (
