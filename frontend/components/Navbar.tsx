@@ -16,6 +16,7 @@ export default function Navbar() {
 
   const links = [
     { href: '/schedules', label: 'Lịch Trực' },
+    { href: '/swaps', label: 'Đổi Trực' },
     ...(user?.role === 'admin'
       ? [{ href: '/cham-truc', label: 'Chấm Trực' }]
       : []),

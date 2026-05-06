@@ -76,6 +76,9 @@ model User {
   approvedSchedules  Schedule[]  @relation("ScheduleApprover")
   approvals          Approval[]
   auditLogs          AuditLog[]
+  swapRequests       ShiftSwap[] @relation("SwapRequester")
+  swapTargets        ShiftSwap[] @relation("SwapTarget")
+  swapReviews        ShiftSwap[] @relation("SwapReviewer")
 
   @@index([departmentId])
   @@index([role])
@@ -132,6 +135,7 @@ model Schedule {
   createdBy   User?      @relation("ScheduleCreator", fields: [createdById], references: [id])
   approvedBy  User?      @relation("ScheduleApprover", fields: [approvedById], references: [id])
   approvals   Approval[]
+  swaps       ShiftSwap[]
 
   @@unique([userId, shiftDate, shiftTypeId])
   @@index([shiftDate])
@@ -154,6 +158,29 @@ model Approval {
 
   @@index([scheduleId])
   @@map("approvals")
+}
+
+model ShiftSwap {
+  id            String    @id @default(uuid()) @db.Uuid
+  scheduleId    String    @map("schedule_id") @db.Uuid
+  requesterId   String    @map("requester_id") @db.Uuid
+  targetUserId  String    @map("target_user_id") @db.Uuid
+  reason        String?
+  status        String    @default("pending") @db.VarChar(20)
+  reviewedById  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewNote    String?   @map("review_note")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  schedule    Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  requester   User     @relation("SwapRequester", fields: [requesterId], references: [id])
+  targetUser  User     @relation("SwapTarget", fields: [targetUserId], references: [id])
+  reviewedBy  User?    @relation("SwapReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([requesterId])
+  @@map("shift_swaps")
 }
 
 model MonthlyReconciliation {

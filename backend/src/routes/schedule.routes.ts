@@ -96,6 +96,23 @@ router.post(
       return res.status(403).json({ error: 'Không có quyền tạo lịch cho khoa này' });
     }
 
+    // Lock: dept_lead cannot add new schedules to a month already submitted
+    if (req.user!.role === 'department_lead') {
+      const d = new Date(data.shiftDate);
+      const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      const lockedExists = await prisma.schedule.findFirst({
+        where: {
+          departmentId: data.departmentId,
+          shiftDate: { gte: monthStart, lte: monthEnd },
+          status: { in: ['submitted', 'approved'] },
+        },
+      });
+      if (lockedExists) {
+        return res.status(403).json({ error: 'Lịch tháng này đã nộp/duyệt — liên hệ admin để chỉnh sửa' });
+      }
+    }
+
     try {
       const shiftTypeId = data.shiftTypeId || (await getDefaultShiftType(prisma)).id;
       const schedule = await prisma.schedule.create({
@@ -197,8 +214,8 @@ router.patch(
       return res.status(403).json({ error: 'Không có quyền' });
     }
 
-    if (existing.status === 'approved' && req.user!.role !== 'admin') {
-      return res.status(403).json({ error: 'Lịch đã duyệt, chỉ admin mới sửa được' });
+    if (existing.status !== 'draft' && req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Lịch đã nộp/duyệt — chỉ admin mới sửa được' });
     }
 
     const updated = await prisma.schedule.update({
@@ -237,8 +254,8 @@ router.delete(
       return res.status(403).json({ error: 'Không có quyền' });
     }
 
-    if (existing.status === 'approved' && req.user!.role !== 'admin') {
-      return res.status(403).json({ error: 'Lịch đã duyệt không thể xóa' });
+    if (existing.status !== 'draft' && req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Lịch đã nộp/duyệt — chỉ admin mới xoá được' });
     }
 
     await prisma.schedule.delete({ where: { id } });
@@ -296,6 +313,96 @@ router.post(
     });
 
     res.json({ submitted: result.count });
+  }
+);
+
+/**
+ * GET /api/schedules/lock-status?year=&month=&departmentId=
+ * Returns whether a (dept,month) is locked (submitted/approved)
+ */
+router.get('/lock-status', authenticate, async (req, res) => {
+  const year = parseInt(req.query.year as string);
+  const month = parseInt(req.query.month as string);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  const where: any = {
+    shiftDate: { gte: startDate, lte: endDate },
+    status: { in: ['submitted', 'approved'] },
+  };
+  if (req.query.departmentId) where.departmentId = req.query.departmentId as string;
+  else if (req.user!.role === 'department_lead') where.departmentId = req.user!.departmentId!;
+
+  const counts = await prisma.schedule.groupBy({
+    by: ['departmentId', 'status'],
+    where,
+    _count: true,
+  });
+  res.json(counts);
+});
+
+/**
+ * POST /api/schedules/duplicate-from
+ * Body: { fromYear, fromMonth, toYear, toMonth, departmentId? }
+ * Tự tạo lịch tháng mới bằng cách sao chép cấu trúc tháng trước (cùng vị trí khoa, cùng người, ngày dịch chuyển theo tuần).
+ */
+router.post(
+  '/duplicate-from',
+  authenticate,
+  authorize('admin', 'department_lead'),
+  async (req, res) => {
+    const schema = z.object({
+      fromYear: z.number(),
+      fromMonth: z.number().min(1).max(12),
+      toYear: z.number(),
+      toMonth: z.number().min(1).max(12),
+      departmentId: z.string().uuid().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+    const { fromYear, fromMonth, toYear, toMonth, departmentId } = parsed.data;
+
+    const where: any = {
+      shiftDate: {
+        gte: new Date(fromYear, fromMonth - 1, 1),
+        lte: new Date(fromYear, fromMonth, 0, 23, 59, 59),
+      },
+    };
+    if (req.user!.role === 'department_lead') where.departmentId = req.user!.departmentId!;
+    else if (departmentId) where.departmentId = departmentId;
+
+    const sourceList = await prisma.schedule.findMany({ where });
+
+    // Map: source day -> new date in target month (cap at last day of target month)
+    const targetDaysInMonth = new Date(toYear, toMonth, 0).getDate();
+    const defaultShift = await getDefaultShiftType(prisma);
+
+    let created = 0;
+    let skipped = 0;
+    for (const s of sourceList) {
+      const srcDay = new Date(s.shiftDate).getDate();
+      const tgtDay = Math.min(srcDay, targetDaysInMonth);
+      const newDate = new Date(toYear, toMonth - 1, tgtDay);
+      try {
+        await prisma.schedule.create({
+          data: {
+            userId: s.userId,
+            departmentId: s.departmentId,
+            shiftTypeId: s.shiftTypeId || defaultShift.id,
+            shiftDate: newDate,
+            isWeekend: [0, 6].includes(newDate.getDay()),
+            createdById: req.user!.id,
+            status: 'draft',
+            note: s.note,
+          },
+        });
+        created++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    res.json({ created, skipped, total: sourceList.length });
   }
 );
 
