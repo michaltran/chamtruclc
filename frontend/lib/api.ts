@@ -73,6 +73,22 @@ export const userApi = {
   delete: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
 };
 
+export const swapApi = {
+  list: (status?: string) => api.get('/swaps', { params: { status } }).then(r=>r.data),
+  create: (data: { scheduleId:string; targetUserId:string; reason?:string }) =>
+    api.post('/swaps', data).then(r=>r.data),
+  approve: (id: string, note?: string) => api.post(`/swaps/${id}/approve`, { note }).then(r=>r.data),
+  reject: (id: string, note?: string) => api.post(`/swaps/${id}/reject`, { note }).then(r=>r.data),
+  cancel: (id: string) => api.delete(`/swaps/${id}`).then(r=>r.data),
+};
+
+export const scheduleExtraApi = {
+  lockStatus: (params: { year:number; month:number; departmentId?:string }) =>
+    api.get('/schedules/lock-status', { params }).then(r=>r.data),
+  duplicateFrom: (data: { fromYear:number; fromMonth:number; toYear:number; toMonth:number; departmentId?:string }) =>
+    api.post('/schedules/duplicate-from', data).then(r=>r.data),
+};
+
 export const departmentApi = {
   list: () => api.get('/departments').then((r) => r.data),
   create: (data: any) => api.post('/departments', data).then((r) => r.data),

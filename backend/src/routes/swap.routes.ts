@@ -1,0 +1,156 @@
+import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
+import { authenticate, authorize } from '../middleware/auth';
+
+const router = Router();
+const prisma = new PrismaClient();
+
+const swapInclude = {
+  schedule: {
+    include: {
+      department: { select: { id: true, name: true, code: true } },
+      shiftType: { select: { id: true, code: true, name: true } },
+      user: { select: { id: true, fullName: true } },
+    },
+  },
+  requester: { select: { id: true, fullName: true, departmentId: true } },
+  targetUser: { select: { id: true, fullName: true, departmentId: true } },
+  reviewedBy: { select: { id: true, fullName: true } },
+};
+
+/**
+ * GET /api/swaps - list swap requests
+ * staff: own (requester or target)
+ * dept_lead: department's
+ * admin: all
+ */
+router.get('/', authenticate, async (req, res) => {
+  const where: any = {};
+  const status = req.query.status as string | undefined;
+  if (status) where.status = status;
+
+  if (req.user!.role === 'staff') {
+    where.OR = [{ requesterId: req.user!.id }, { targetUserId: req.user!.id }];
+  } else if (req.user!.role === 'department_lead') {
+    where.schedule = { departmentId: req.user!.departmentId };
+  }
+
+  const swaps = await prisma.shiftSwap.findMany({
+    where,
+    include: swapInclude as any,
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(swaps);
+});
+
+/**
+ * POST /api/swaps - create swap request (any authenticated user)
+ */
+router.post('/', authenticate, async (req, res) => {
+  const schema = z.object({
+    scheduleId: z.string().uuid(),
+    targetUserId: z.string().uuid(),
+    reason: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  const sched = await prisma.schedule.findUnique({ where: { id: parsed.data.scheduleId } });
+  if (!sched) return res.status(404).json({ error: 'Không tìm thấy ca trực' });
+
+  // staff can only swap their own schedule
+  if (req.user!.role === 'staff' && sched.userId !== req.user!.id) {
+    return res.status(403).json({ error: 'Chỉ có thể đổi ca trực của chính mình' });
+  }
+
+  if (parsed.data.targetUserId === sched.userId) {
+    return res.status(400).json({ error: 'Không thể đổi cho chính người đang trực' });
+  }
+
+  // prevent duplicate pending requests
+  const existing = await prisma.shiftSwap.findFirst({
+    where: { scheduleId: parsed.data.scheduleId, status: 'pending' },
+  });
+  if (existing) return res.status(409).json({ error: 'Ca trực này đã có yêu cầu đổi đang chờ duyệt' });
+
+  const swap = await prisma.shiftSwap.create({
+    data: {
+      scheduleId: parsed.data.scheduleId,
+      requesterId: req.user!.id,
+      targetUserId: parsed.data.targetUserId,
+      reason: parsed.data.reason,
+      status: 'pending',
+    },
+    include: swapInclude as any,
+  });
+  res.status(201).json(swap);
+});
+
+/**
+ * POST /api/swaps/:id/approve - admin only
+ * Applies the swap: schedule.userId = targetUserId
+ */
+router.post('/:id/approve', authenticate, authorize('admin'), async (req, res) => {
+  const id = req.params.id as string;
+  const swap = await prisma.shiftSwap.findUnique({ where: { id } });
+  if (!swap) return res.status(404).json({ error: 'Không tìm thấy' });
+  if (swap.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu đã được xử lý' });
+
+  const result = await prisma.$transaction([
+    prisma.schedule.update({
+      where: { id: swap.scheduleId },
+      data: { userId: swap.targetUserId },
+    }),
+    prisma.shiftSwap.update({
+      where: { id },
+      data: {
+        status: 'approved',
+        reviewedById: req.user!.id,
+        reviewedAt: new Date(),
+        reviewNote: req.body.note,
+      },
+      include: swapInclude as any,
+    }),
+  ]);
+  res.json(result[1]);
+});
+
+/**
+ * POST /api/swaps/:id/reject - admin only
+ */
+router.post('/:id/reject', authenticate, authorize('admin'), async (req, res) => {
+  const id = req.params.id as string;
+  const swap = await prisma.shiftSwap.findUnique({ where: { id } });
+  if (!swap) return res.status(404).json({ error: 'Không tìm thấy' });
+  if (swap.status !== 'pending') return res.status(400).json({ error: 'Yêu cầu đã được xử lý' });
+
+  const updated = await prisma.shiftSwap.update({
+    where: { id },
+    data: {
+      status: 'rejected',
+      reviewedById: req.user!.id,
+      reviewedAt: new Date(),
+      reviewNote: req.body.note,
+    },
+    include: swapInclude as any,
+  });
+  res.json(updated);
+});
+
+/**
+ * DELETE /api/swaps/:id - cancel own pending request
+ */
+router.delete('/:id', authenticate, async (req, res) => {
+  const id = req.params.id as string;
+  const swap = await prisma.shiftSwap.findUnique({ where: { id } });
+  if (!swap) return res.status(404).json({ error: 'Không tìm thấy' });
+  if (swap.status !== 'pending') return res.status(400).json({ error: 'Chỉ huỷ được yêu cầu đang chờ' });
+  if (swap.requesterId !== req.user!.id && req.user!.role !== 'admin') {
+    return res.status(403).json({ error: 'Không có quyền' });
+  }
+  await prisma.shiftSwap.delete({ where: { id } });
+  res.json({ success: true });
+});
+
+export default router;

@@ -11,7 +11,28 @@
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "Bash(python -c ' *)",
       "Bash(pip install *)",
-      "Bash(python -c \"import bcrypt; h=bcrypt.hashpw\\(b'Truc@2026', bcrypt.gensalt\\(10\\)\\).decode\\(\\); print\\(h\\)\")"
+      "Bash(python -c \"import bcrypt; h=bcrypt.hashpw\\(b'Truc@2026', bcrypt.gensalt\\(10\\)\\).decode\\(\\); print\\(h\\)\")",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(npm run *)",
+      "Bash(npx pm2 *)",
+      "Bash(where psql *)",
+      "Bash(\"C:/Program Files/PostgreSQL/17/bin/psql.exe\" --version)",
+      "Bash(\"C:/Program Files/PostgreSQL/16/bin/psql.exe\" --version)",
+      "Bash(\"C:/Program Files/PostgreSQL/15/bin/psql.exe\" --version)",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(find /c -maxdepth 5 -name \"psql.exe\")",
+      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -f \"C:/Users/MAI_KHNV/Desktop/seed_staff.sql\")",
+      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT \\(SELECT COUNT\\(*\\) FROM users\\) as users, \\(SELECT COUNT\\(*\\) FROM departments\\) as depts;\")",
+      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT d.code, d.name, COUNT\\(u.id\\) as staff FROM departments d LEFT JOIN users u ON u.department_id=d.id GROUP BY d.code, d.name ORDER BY d.code;\")",
+      "Bash(npx prisma *)",
+      "Bash(DATABASE_URL=\"postgresql://duty_user:duty123_manh_hon@localhost:5432/duty_roster\" npx prisma generate)",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/prisma/schema.prisma\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/prisma/schema.prisma\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/schedule.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/schedule.routes.ts\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/swap.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/swap.routes.ts\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/server.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/server.ts\")",
+      "Bash(curl -s http://localhost:4000/health)"
     ]
   }
 }
