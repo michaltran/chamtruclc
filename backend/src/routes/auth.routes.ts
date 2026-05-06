@@ -53,7 +53,7 @@ router.post('/login', async (req, res) => {
       departmentId: user.departmentId,
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES }
+    { expiresIn: JWT_EXPIRES as any }
   );
 
   // Audit log
@@ -88,9 +88,10 @@ router.get('/me', authenticate, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
     include: { department: true },
-    omit: { passwordHash: true },
   });
-  res.json(user);
+  if (!user) return res.status(404).json({ error: 'Không tìm thấy' });
+  const { passwordHash: _, ...safeUser } = user;
+  res.json(safeUser);
 });
 
 /**
