@@ -14,21 +14,31 @@ const createScheduleSchema = z.object({
   note: z.string().optional(),
 });
 
+// Khoa cấp cứu (cho ca TC/CC/LC)
+const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
+// Khoa hồi sức / hồi tỉnh (cho ca THS/CHS/LHS)
+const RECOVERY_DEPT_CODES = new Set(['GMHS']);
+
 /**
- * Pick shift type smartly based on the date:
- * - Holiday → L
- * - Saturday/Sunday → C
- * - Weekday → T
- * (Caller chỉ định trước để override → caller logic)
+ * Pick shift type smartly based on (date, departmentCode):
+ *   normal/weekday=T  weekend=C  holiday=L
+ *   emergency/weekday=TC weekend=CC holiday=LC
+ *   recovery/weekday=THS weekend=CHS holiday=LHS
  */
-async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date) {
-  const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: date } });
-  let code: 'T' | 'C' | 'L' = 'T';
-  if (isHoliday) code = 'L';
-  else if ([0, 6].includes(date.getDay())) code = 'C';
+async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, departmentCode?: string) {
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: dateOnly } });
+  const isWeekend = [0, 6].includes(date.getDay());
+  const isEmerg = !!departmentCode && EMERGENCY_DEPT_CODES.has(departmentCode);
+  const isRecov = !!departmentCode && RECOVERY_DEPT_CODES.has(departmentCode);
+
+  let code: string = 'T';
+  if (isRecov) code = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
+  else if (isEmerg) code = isHoliday ? 'LC' : isWeekend ? 'CC' : 'TC';
+  else code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
+
   let st = await prisma.shiftType.findFirst({ where: { code } });
   if (!st) {
-    // fallback to any code = T
     st = await prisma.shiftType.findFirst({ where: { code: 'T' } });
   }
   if (!st) {
@@ -154,7 +164,13 @@ router.post(
     }
 
     try {
-      const shiftTypeId = data.shiftTypeId || (await getDefaultShiftTypeForDate(prisma, new Date(data.shiftDate))).id;
+      // Determine shift code from (date, dept code) — auto-pick T/C/L/TC/CC/LC/THS/CHS/LHS
+      const dept = await prisma.department.findUnique({
+        where: { id: data.departmentId },
+        select: { code: true },
+      });
+      const shiftTypeId = data.shiftTypeId
+        || (await getDefaultShiftTypeForDate(prisma, new Date(data.shiftDate), dept?.code)).id;
       const schedule = await prisma.schedule.create({
         data: {
           userId: data.userId,
@@ -215,7 +231,12 @@ router.post(
         continue;
       }
       try {
-        const shiftTypeId = item.shiftTypeId || (await getDefaultShiftTypeForDate(prisma, new Date(item.shiftDate))).id;
+        const itemDept = await prisma.department.findUnique({
+          where: { id: item.departmentId },
+          select: { code: true },
+        });
+        const shiftTypeId = item.shiftTypeId
+          || (await getDefaultShiftTypeForDate(prisma, new Date(item.shiftDate), itemDept?.code)).id;
         const s = await prisma.schedule.create({
           data: {
             userId: item.userId,

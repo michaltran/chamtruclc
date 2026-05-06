@@ -7,6 +7,16 @@ import { authenticate, authorize } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
+/** Convert empty strings to undefined so optional zod/Prisma fields don't choke. */
+function cleanEmpty<T extends Record<string, any>>(obj: T): Partial<T> {
+  const out: any = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v === '' || v === null) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 /**
  * GET /api/users?departmentId=...
  */
@@ -44,30 +54,56 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     phone: z.string().optional(),
   });
 
-  const parsed = schema.safeParse(req.body);
+  const parsed = schema.safeParse(cleanEmpty(req.body));
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
 
   const { password, ...rest } = parsed.data;
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const user = await prisma.user.create({
-    data: { ...rest, passwordHash },
-  });
-
-  const { passwordHash: _, ...safeUser } = user;
-  res.status(201).json(safeUser);
+  try {
+    const user = await prisma.user.create({
+      data: { ...rest, passwordHash },
+    });
+    const { passwordHash: _, ...safeUser } = user;
+    res.status(201).json(safeUser);
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Tên đăng nhập, email hoặc mã NV đã tồn tại' });
+    }
+    throw err;
+  }
 });
 
 /**
  * PATCH /api/users/:id
  */
 router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
-  const updated = await prisma.user.update({
-    where: { id: req.params.id as string },
-    data: req.body,
+  const updateSchema = z.object({
+    fullName: z.string().min(1).optional(),
+    email: z.string().email().optional(),
+    employeeCode: z.string().optional(),
+    role: z.enum(['admin', 'department_lead', 'staff']).optional(),
+    departmentId: z.string().uuid().optional(),
+    title: z.string().optional(),
+    phone: z.string().optional(),
+    isActive: z.boolean().optional(),
   });
-  const { passwordHash: _, ...safeUser } = updated;
-  res.json(safeUser);
+  const parsed = updateSchema.safeParse(cleanEmpty(req.body));
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.params.id as string },
+      data: parsed.data,
+    });
+    const { passwordHash: _, ...safeUser } = updated;
+    res.json(safeUser);
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Email hoặc mã NV đã tồn tại' });
+    }
+    throw err;
+  }
 });
 
 /**

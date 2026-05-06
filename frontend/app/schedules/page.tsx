@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import { scheduleApi, userApi, departmentApi, scheduleExtraApi, swapApi } from '@/lib/api'
-import { format, startOfWeek, addDays, addWeeks, subWeeks, getDaysInMonth, parseISO } from 'date-fns'
+import { format, startOfWeek, addDays, addWeeks, getDaysInMonth } from 'date-fns'
 import { vi } from 'date-fns/locale'
 
 const DUTY_ORDER = [
@@ -31,7 +31,6 @@ export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
-  const [shiftTypes, setShiftTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{deptId:string, date:string}|null>(null)
@@ -76,37 +75,37 @@ export default function SchedulesPage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    // Load all users (admin) or department users (dept_lead) — backend already filters
+    if (!user) return
     userApi.list().then(setUsers).catch(()=>{})
-    scheduleApi.shiftTypes().then(setShiftTypes).catch(()=>{})
   }, [user])
 
-  // Filter staff dropdown by selected duty department: only show users in that dept
-  const filteredUsersForForm = form.departmentId
-    ? users.filter(u => u.departmentId === form.departmentId)
-    : users
+  // Memoize derived values — these were re-computed on every render before
+  const filteredUsersForForm = useMemo(() => (
+    form.departmentId ? users.filter(u => u.departmentId === form.departmentId) : users
+  ), [users, form.departmentId])
 
-  // Week days: Mon-Sun of the selected week offset within month
-  const firstOfMonth = new Date(year, month - 1, 1)
-  const baseWeek = startOfWeek(firstOfMonth, { weekStartsOn: 1 })
-  const weekStart = addWeeks(baseWeek, weekOffset)
-  const weekDays = Array.from({length:7}, (_,i) => addDays(weekStart, i))
+  const { weekStart, weekDays, daysInMonth, maxWeekOffset } = useMemo(() => {
+    const firstOfMonth = new Date(year, month - 1, 1)
+    const baseWeek = startOfWeek(firstOfMonth, { weekStartsOn: 1 })
+    const ws = addWeeks(baseWeek, weekOffset)
+    const wd = Array.from({length:7}, (_,i) => addDays(ws, i))
+    const dim = getDaysInMonth(new Date(year, month - 1))
+    return { weekStart: ws, weekDays: wd, daysInMonth: dim, maxWeekOffset: Math.ceil(dim / 7) + 1 }
+  }, [year, month, weekOffset])
 
-  // Filter days that belong to the current month
-  const daysInMonth = getDaysInMonth(new Date(year, month - 1))
-
-  // Group schedules by date+dept
-  type SchedMap = Record<string, Record<string, any[]>>
-  const schedMap: SchedMap = {}
-  schedules.forEach(s => {
-    const d = format(new Date(s.shiftDate), 'yyyy-MM-dd')
-    const dept = s.departmentId
-    if (!schedMap[d]) schedMap[d] = {}
-    if (!schedMap[d][dept]) schedMap[d][dept] = []
-    schedMap[d][dept].push(s)
-  })
-
-  const maxWeekOffset = Math.ceil(daysInMonth / 7) + 1
+  // Group schedules by date+dept and pre-split BS/DD — heavy work, memoized
+  const schedMap = useMemo(() => {
+    const m: Record<string, Record<string, { bs: any[]; dd: any[] }>> = {}
+    for (const s of schedules) {
+      const d = format(new Date(s.shiftDate), 'yyyy-MM-dd')
+      const dept = s.departmentId
+      if (!m[d]) m[d] = {}
+      if (!m[d][dept]) m[d][dept] = { bs: [], dd: [] }
+      const isBs = s.user?.title === 'Bác sĩ' || s.user?.title?.toLowerCase().includes('bác sĩ') || s.user?.title?.toLowerCase().includes('lãnh đạo')
+      ;(isBs ? m[d][dept].bs : m[d][dept].dd).push(s)
+    }
+    return m
+  }, [schedules])
 
   const openAddForm = (deptId: string, date: string) => {
     setSelectedCell({deptId, date})
@@ -273,12 +272,10 @@ export default function SchedulesPage() {
                   </tr>
                   <tr className="bg-blue-100 text-blue-800 text-[10px]">
                     <th className="sticky left-0 z-10 bg-blue-100 border-r border-gray-200 px-3 py-1"></th>
-                    {weekDays.map(d => (
-                      <>
-                        <th key={`${d.getDate()}-bs`} className="px-1 py-1 border-r border-blue-50 font-medium text-center w-[65px]">BS</th>
-                        <th key={`${d.getDate()}-dd`} className="px-1 py-1 border-r border-gray-200 font-medium text-center w-[65px]">ĐD/HS/KTV</th>
-                      </>
-                    ))}
+                    {weekDays.flatMap(d => [
+                      <th key={`${d.getDate()}-bs`} className="px-1 py-1 border-r border-blue-50 font-medium text-center w-[65px]">BS</th>,
+                      <th key={`${d.getDate()}-dd`} className="px-1 py-1 border-r border-gray-200 font-medium text-center w-[65px]">ĐD/HS/KTV</th>,
+                    ])}
                   </tr>
                 </thead>
                 <tbody>
@@ -294,15 +291,12 @@ export default function SchedulesPage() {
                             )}
                           </div>
                         </td>
-                        {weekDays.map(d => {
+                        {weekDays.flatMap(d => {
                           const dateStr = format(d,'yyyy-MM-dd')
                           const inMonth = d.getMonth() === month-1 && d.getFullYear() === year
                           const isWeekend = [0,6].includes(d.getDay())
-                          const cellSchedules = schedMap[dateStr]?.[dept.id] || []
-                          const bsSchedules = cellSchedules.filter(s=>s.user?.title==='Bác sĩ'||s.user?.title?.includes('BS'))
-                          const ddSchedules = cellSchedules.filter(s=>!bsSchedules.includes(s))
-
-                          const CellContent = ({items, type}: {items:any[], type:'BS'|'DD'}) => (
+                          const cell = schedMap[dateStr]?.[dept.id] || { bs: [], dd: [] }
+                          const renderCell = (items: any[], type: 'BS'|'DD') => (
                             <td key={`${dateStr}-${dept.id}-${type}`}
                               className={`align-top border-r ${type==='DD'?'border-gray-200':'border-blue-50'} px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''}  ${isWeekend?'bg-orange-50/40':''}`}>
                               <div className="space-y-1 min-h-[44px]">
@@ -338,13 +332,7 @@ export default function SchedulesPage() {
                               </div>
                             </td>
                           )
-
-                          return (
-                            <>
-                              <CellContent key={`${dateStr}-bs`} items={bsSchedules} type="BS" />
-                              <CellContent key={`${dateStr}-dd`} items={ddSchedules} type="DD" />
-                            </>
-                          )
+                          return [renderCell(cell.bs, 'BS'), renderCell(cell.dd, 'DD')]
                         })}
                       </tr>
                     )
@@ -505,16 +493,10 @@ export default function SchedulesPage() {
                 <input type="date" value={form.shiftDate} onChange={e=>setForm({...form,shiftDate:e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required/>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Mã ca trực <span className="text-gray-400 text-xs">(ký hiệu chấm trực)</span></label>
-                <select value={form.shiftTypeId} onChange={e=>setForm({...form,shiftTypeId:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
-                  <option value="">— Tự động chọn theo ngày —</option>
-                  {shiftTypes.map(st=>(
-                    <option key={st.id} value={st.id}>{st.code} — {st.name}</option>
-                  ))}
-                </select>
-              </div>
+              <p className="text-xs text-gray-500 italic">
+                💡 Mã ca trực sẽ tự động xác định theo (khoa + ngày): T/C/L cho ca thường,
+                TC/CC/LC cho cấp cứu, THS/CHS/LHS cho hồi sức.
+              </p>
               <div>
                 <label className="text-sm font-medium text-gray-700">Ghi chú</label>
                 <input type="text" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}
