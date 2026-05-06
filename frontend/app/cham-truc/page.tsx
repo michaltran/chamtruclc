@@ -20,14 +20,27 @@ const titleRank = (title?: string) => {
 }
 
 const SHIFT_CODE_COLORS: Record<string, string> = {
-  T: 'bg-blue-100 text-blue-800',
-  C: 'bg-green-100 text-green-800',
-  TC: 'bg-teal-100 text-teal-800',
-  CC: 'bg-red-100 text-red-800',
-  LC: 'bg-yellow-100 text-yellow-800',
-  LHS: 'bg-purple-100 text-purple-800',
+  T:   'bg-blue-100 text-blue-800',
+  C:   'bg-green-100 text-green-800',
+  L:   'bg-orange-100 text-orange-800',
+  TC:  'bg-teal-100 text-teal-800',
+  CC:  'bg-red-100 text-red-800',
+  LC:  'bg-yellow-100 text-yellow-800',
   THS: 'bg-indigo-100 text-indigo-800',
-  L: 'bg-orange-100 text-orange-800',
+  CHS: 'bg-purple-100 text-purple-800',
+  LHS: 'bg-pink-100 text-pink-800',
+}
+
+const SHIFT_CODE_NAMES: Record<string, string> = {
+  T:   'Trực bình thường trong tuần 24/24',
+  C:   'Trực bình thường thứ 7, CN 24/24',
+  L:   'Trực bình thường ngày Lễ 24/24',
+  TC:  'Trực cấp cứu trong tuần 24/24',
+  CC:  'Trực cấp cứu thứ 7, CN 24/24',
+  LC:  'Trực cấp cứu ngày Lễ 24/24',
+  THS: 'Phiên trực ngày thường hồi sức hồi tỉnh 24/24',
+  CHS: 'Phiên trực thứ 7, CN hồi sức hồi tỉnh 24/24',
+  LHS: 'Phiên trực ngày Lễ, tết hồi sức hồi tỉnh 24/24',
 }
 
 export default function ChamTrucPage() {
@@ -249,17 +262,20 @@ export default function ChamTrucPage() {
           </div>
         )}
 
-        {/* Legend */}
+        {/* Legend - 9 ký hiệu chấm trực */}
         {!printMode && (
-          <div className="flex flex-wrap gap-3 mt-4 text-xs">
-            {Object.entries(SHIFT_CODE_COLORS).map(([code, cls]) => (
-              <span key={code} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${cls}`}>
-                <span className="font-bold">{code}</span>
-                <span className="opacity-70">= {
-                  {T:'Thường trực',C:'Ca',TC:'Thứ tư ca',CC:'Ca cuối',LC:'Lễ ca',LHS:'Lễ hội sản',THS:'Thứ tư hội sản',L:'Lễ'}[code]||''
-                }</span>
-              </span>
-            ))}
+          <div className="bg-white rounded-xl shadow-sm p-4 mt-4">
+            <h3 className="text-xs font-bold text-gray-700 uppercase mb-2">Ký hiệu chấm trực</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              {['T','C','L','TC','CC','LC','THS','CHS','LHS'].map(code => (
+                <div key={code} className="flex items-center gap-2">
+                  <span className={`inline-block w-10 text-center px-1 py-0.5 rounded font-bold ${SHIFT_CODE_COLORS[code]}`}>
+                    {code}
+                  </span>
+                  <span className="text-gray-600 leading-tight">{SHIFT_CODE_NAMES[code]}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
