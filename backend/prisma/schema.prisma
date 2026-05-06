@@ -1,0 +1,200 @@
+// Prisma Schema - Hệ thống quản lý chấm công trực
+// Đồng bộ với database/schema.sql
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  department_lead
+  staff
+}
+
+enum ScheduleStatus {
+  draft
+  submitted
+  approved
+  rejected
+  cancelled
+}
+
+enum ApprovalAction {
+  submit
+  approve
+  reject
+  revise
+}
+
+enum ReconciliationStatus {
+  pending
+  confirmed
+  disputed
+  finalized
+}
+
+model Department {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(20)
+  name        String   @db.VarChar(150)
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  users           User[]
+  schedules       Schedule[]
+  reconciliations MonthlyReconciliation[]
+
+  @@map("departments")
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  username      String    @unique @db.VarChar(50)
+  email         String?   @unique @db.VarChar(150)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  fullName      String    @map("full_name") @db.VarChar(150)
+  employeeCode  String?   @unique @map("employee_code") @db.VarChar(50)
+  role          UserRole  @default(staff)
+  departmentId  String?   @map("department_id") @db.Uuid
+  phone         String?   @db.VarChar(20)
+  title         String?   @db.VarChar(100)
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  department         Department? @relation(fields: [departmentId], references: [id])
+  schedules          Schedule[]  @relation("UserSchedules")
+  createdSchedules   Schedule[]  @relation("ScheduleCreator")
+  approvedSchedules  Schedule[]  @relation("ScheduleApprover")
+  approvals          Approval[]
+  auditLogs          AuditLog[]
+
+  @@index([departmentId])
+  @@index([role])
+  @@map("users")
+}
+
+model ShiftType {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique @db.VarChar(10)
+  name           String   @db.VarChar(50)
+  startTime      DateTime @map("start_time") @db.Time
+  endTime        DateTime @map("end_time") @db.Time
+  durationHours  Decimal  @map("duration_hours") @db.Decimal(4, 2)
+  baseAmount     Decimal  @default(0) @map("base_amount") @db.Decimal(12, 2)
+  weekendCoef    Decimal  @default(1.5) @map("weekend_coef") @db.Decimal(4, 2)
+  holidayCoef    Decimal  @default(2.0) @map("holiday_coef") @db.Decimal(4, 2)
+  color          String?  @db.VarChar(20)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  schedules Schedule[]
+
+  @@map("shift_types")
+}
+
+model Holiday {
+  id          String   @id @default(uuid()) @db.Uuid
+  holidayDate DateTime @unique @map("holiday_date") @db.Date
+  name        String   @db.VarChar(150)
+  isPaid      Boolean  @default(true) @map("is_paid")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("holidays")
+}
+
+model Schedule {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  departmentId  String         @map("department_id") @db.Uuid
+  shiftTypeId   String         @map("shift_type_id") @db.Uuid
+  shiftDate     DateTime       @map("shift_date") @db.Date
+  status        ScheduleStatus @default(draft)
+  note          String?
+  isWeekend     Boolean        @map("is_weekend")
+  createdById   String?        @map("created_by") @db.Uuid
+  approvedById  String?        @map("approved_by") @db.Uuid
+  approvedAt    DateTime?      @map("approved_at") @db.Timestamptz
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  user        User       @relation("UserSchedules", fields: [userId], references: [id])
+  department  Department @relation(fields: [departmentId], references: [id])
+  shiftType   ShiftType  @relation(fields: [shiftTypeId], references: [id])
+  createdBy   User?      @relation("ScheduleCreator", fields: [createdById], references: [id])
+  approvedBy  User?      @relation("ScheduleApprover", fields: [approvedById], references: [id])
+  approvals   Approval[]
+
+  @@unique([userId, shiftDate, shiftTypeId])
+  @@index([shiftDate])
+  @@index([userId, shiftDate])
+  @@index([departmentId, shiftDate])
+  @@index([status])
+  @@map("schedules")
+}
+
+model Approval {
+  id          String         @id @default(uuid()) @db.Uuid
+  scheduleId  String         @map("schedule_id") @db.Uuid
+  actorId     String         @map("actor_id") @db.Uuid
+  action      ApprovalAction
+  comment     String?
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  actor    User     @relation(fields: [actorId], references: [id])
+
+  @@index([scheduleId])
+  @@map("approvals")
+}
+
+model MonthlyReconciliation {
+  id            String                @id @default(uuid()) @db.Uuid
+  departmentId  String                @map("department_id") @db.Uuid
+  periodYear    Int                   @map("period_year")
+  periodMonth   Int                   @map("period_month")
+  totalShifts   Int                   @default(0) @map("total_shifts")
+  totalHours    Decimal               @default(0) @map("total_hours") @db.Decimal(8, 2)
+  totalAmount   Decimal               @default(0) @map("total_amount") @db.Decimal(14, 2)
+  status        ReconciliationStatus  @default(pending)
+  submittedById String?               @map("submitted_by") @db.Uuid
+  submittedAt   DateTime?             @map("submitted_at") @db.Timestamptz
+  confirmedById String?               @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime?             @map("confirmed_at") @db.Timestamptz
+  note          String?
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@unique([departmentId, periodYear, periodMonth])
+  @@map("monthly_reconciliations")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  action      String    @db.VarChar(50)
+  entityType  String    @map("entity_type") @db.VarChar(50)
+  entityId    String?   @map("entity_id") @db.Uuid
+  oldData     Json?     @map("old_data")
+  newData     Json?     @map("new_data")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
