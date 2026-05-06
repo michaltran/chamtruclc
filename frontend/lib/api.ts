@@ -71,6 +71,9 @@ export const userApi = {
   update: (id: string, data: any) =>
     api.patch(`/users/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
+  grantLogin: (id: string, data: { password: string; role: 'admin'|'department_lead'|'staff' }) =>
+    api.post(`/users/${id}/grant-login`, data).then((r) => r.data),
+  revokeLogin: (id: string) => api.post(`/users/${id}/revoke-login`).then((r) => r.data),
 };
 
 export const swapApi = {

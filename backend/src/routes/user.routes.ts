@@ -25,7 +25,7 @@ router.get('/', authenticate, async (req, res) => {
     orderBy: { fullName: 'asc' },
   });
 
-  res.json(users.map(({ passwordHash: _, ...u }) => u));
+  res.json(users.map(({ passwordHash, ...u }) => ({ ...u, canLogin: !!passwordHash })));
 });
 
 /**
@@ -65,6 +65,40 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
   const updated = await prisma.user.update({
     where: { id: req.params.id as string },
     data: req.body,
+  });
+  const { passwordHash: _, ...safeUser } = updated;
+  res.json(safeUser);
+});
+
+/**
+ * POST /api/users/:id/grant-login (admin only)
+ * Cấp quyền đăng nhập: đặt mật khẩu mới + role + đảm bảo isActive=true
+ */
+router.post('/:id/grant-login', authenticate, authorize('admin'), async (req, res) => {
+  const schema = z.object({
+    password: z.string().min(6),
+    role: z.enum(['admin', 'department_lead', 'staff']).default('staff'),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const updated = await prisma.user.update({
+    where: { id: req.params.id as string },
+    data: { passwordHash, role: parsed.data.role, isActive: true },
+  });
+  const { passwordHash: _, ...safeUser } = updated;
+  res.json(safeUser);
+});
+
+/**
+ * POST /api/users/:id/revoke-login (admin only)
+ * Thu hồi quyền đăng nhập: xoá password_hash, role về staff
+ */
+router.post('/:id/revoke-login', authenticate, authorize('admin'), async (req, res) => {
+  const updated = await prisma.user.update({
+    where: { id: req.params.id as string },
+    data: { passwordHash: '', role: 'staff' },
   });
   const { passwordHash: _, ...safeUser } = updated;
   res.json(safeUser);

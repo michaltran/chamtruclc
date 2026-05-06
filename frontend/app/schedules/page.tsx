@@ -7,8 +7,20 @@ import { format, startOfWeek, addDays, addWeeks, subWeeks, getDaysInMonth, parse
 import { vi } from 'date-fns/locale'
 
 const DUTY_ORDER = [
-  'LANHDAO','CC','HS','NGOAI','GAYME','SAN','NOI','NHI','YHCT','LCK','CDHA','XN','VIENPI','NHATHUOC','LAIXE'
+  'CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
+
+const SHIFT_CODE_COLORS: Record<string, string> = {
+  T: 'bg-blue-100 text-blue-800 border-blue-300',
+  C: 'bg-green-100 text-green-800 border-green-300',
+  TC: 'bg-teal-100 text-teal-800 border-teal-300',
+  CC: 'bg-red-100 text-red-800 border-red-300',
+  L: 'bg-orange-100 text-orange-800 border-orange-300',
+  LC: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  THS: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+  CHS: 'bg-purple-100 text-purple-800 border-purple-300',
+  LHS: 'bg-pink-100 text-pink-800 border-pink-300',
+}
 
 export default function SchedulesPage() {
   const router = useRouter()
@@ -218,18 +230,26 @@ export default function SchedulesPage() {
         ) : viewMode === 'week' ? (
           /* WEEKLY VIEW */
           <div>
+            {/* Excel-style title */}
+            <div className="text-center bg-white rounded-t-xl border border-b-0 border-gray-200 py-3 px-4">
+              <h2 className="text-base font-bold text-blue-900 uppercase tracking-wide">
+                LỊCH TRỰC TOÀN VIỆN THÁNG {month}/{year}
+              </h2>
+              <p className="text-xs text-gray-600 mt-1">
+                Từ ngày {format(weekStart,'dd/MM/yyyy')} đến ngày {format(weekDays[6],'dd/MM/yyyy')}
+                <span className="ml-3 text-gray-400">— Tuần {weekOffset+1}</span>
+              </p>
+            </div>
             {/* Week navigation */}
-            <div className="flex items-center justify-between mb-3 bg-white rounded-lg px-4 py-2 shadow-sm">
+            <div className="flex items-center justify-between bg-gray-50 px-4 py-1.5 border-x border-gray-200">
               <button onClick={()=>setWeekOffset(w=>Math.max(0,w-1))} disabled={weekOffset===0}
-                className="text-gray-600 hover:text-blue-600 disabled:opacity-30 text-lg font-bold">‹</button>
-              <span className="text-sm font-semibold text-gray-700">
-                Tuần {weekOffset+1} — {format(weekStart,'dd/MM')} đến {format(weekDays[6],'dd/MM/yyyy')}
-              </span>
+                className="text-gray-600 hover:text-blue-600 disabled:opacity-30 text-base font-bold px-2">‹ Tuần trước</button>
+              <button onClick={()=>window.print()} className="text-xs text-gray-500 hover:text-blue-600">🖨️ In tuần này</button>
               <button onClick={()=>setWeekOffset(w=>Math.min(maxWeekOffset,w+1))}
-                className="text-gray-600 hover:text-blue-600 text-lg font-bold">›</button>
+                className="text-gray-600 hover:text-blue-600 text-base font-bold px-2">Tuần sau ›</button>
             </div>
 
-            <div className="overflow-x-auto rounded-xl shadow-sm">
+            <div className="overflow-x-auto rounded-b-xl shadow-sm border border-t-0 border-gray-200">
               <table className="min-w-full border-collapse text-xs bg-white">
                 <thead>
                   <tr className="bg-blue-700 text-white">
@@ -283,24 +303,30 @@ export default function SchedulesPage() {
                           const CellContent = ({items, type}: {items:any[], type:'BS'|'DD'}) => (
                             <td key={`${dateStr}-${dept.id}-${type}`}
                               className={`align-top border-r ${type==='DD'?'border-gray-200':'border-blue-50'} px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''}  ${isWeekend?'bg-orange-50/40':''}`}>
-                              <div className="space-y-0.5 min-h-[40px]">
-                                {items.map(s=>(
-                                  <div key={s.id} className={`flex items-center justify-between rounded px-1 py-0.5 group text-[10px] ${type==='BS'?'bg-blue-100 text-blue-900':'bg-green-100 text-green-900'}`}>
-                                    <span className="leading-tight truncate max-w-[55px]" title={s.user?.fullName}>
-                                      {s.user?.fullName?.split(' ').pop()}
-                                    </span>
-                                    <div className="hidden group-hover:flex gap-0.5 ml-1 shrink-0">
-                                      {canEdit && s.status==='draft' && isAdmin && (
-                                        <button onClick={()=>handleApprove(s.id)} className="text-green-600 hover:text-green-800" title="Duyệt">✓</button>
-                                      )}
-                                      {/* Staff: report swap on own ca */}
-                                      {!canEdit && s.userId === user?.id && (
-                                        <button onClick={()=>openSwapModal(s)} className="text-orange-500 hover:text-orange-700" title="Báo đổi trực">⇄</button>
-                                      )}
-                                      {canEdit && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600" title="Xoá">✕</button>}
+                              <div className="space-y-1 min-h-[44px]">
+                                {items.map(s=>{
+                                  const code = s.shiftType?.code || 'T'
+                                  const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
+                                  return (
+                                    <div key={s.id} className={`group rounded px-1 py-0.5 ${type==='BS'?'bg-blue-50 border border-blue-200':'bg-green-50 border border-green-200'}`}>
+                                      <div className="flex items-center gap-1 text-[10px]">
+                                        <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
+                                        <span className="flex-1 leading-tight font-medium truncate" title={s.user?.fullName}>
+                                          {s.user?.fullName}
+                                        </span>
+                                        <div className="hidden group-hover:flex gap-0.5 shrink-0">
+                                          {canEdit && s.status==='draft' && isAdmin && (
+                                            <button onClick={()=>handleApprove(s.id)} className="text-green-600 hover:text-green-800" title="Duyệt">✓</button>
+                                          )}
+                                          {!canEdit && s.userId === user?.id && (
+                                            <button onClick={()=>openSwapModal(s)} className="text-orange-500 hover:text-orange-700" title="Báo đổi trực">⇄</button>
+                                          )}
+                                          {canEdit && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600" title="Xoá">✕</button>}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                                 {canEdit && inMonth && (
                                   <button onClick={()=>openAddForm(dept.id, dateStr)}
                                     className="w-full text-gray-300 hover:text-blue-500 text-center leading-none opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity text-base">
@@ -370,38 +396,77 @@ export default function SchedulesPage() {
         )}
       </div>
 
-      {/* Modal báo đổi trực */}
+      {/* Biểu mẫu báo đổi trực */}
       {showSwapModal && swapTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-bold mb-2">Báo đổi trực</h2>
-            <p className="text-xs text-gray-500 mb-3">
-              Ca: <b>{swapTarget.user?.fullName}</b> — {format(new Date(swapTarget.shiftDate),'dd/MM/yyyy')} — {swapTarget.department?.name}
-            </p>
-            <form onSubmit={handleSwapSubmit} className="space-y-3">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-6">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl my-auto mx-4">
+            {/* Header */}
+            <div className="text-center border-b pt-6 pb-4 px-6">
+              <p className="text-xs uppercase text-gray-600 leading-relaxed">
+                TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU<br/>
+                <b>CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><br/>
+                <span className="text-gray-500">Độc lập – Tự do – Hạnh phúc</span>
+              </p>
+              <h2 className="text-xl font-bold mt-4 uppercase">Đơn đề nghị đổi ca trực</h2>
+            </div>
+            <form onSubmit={handleSwapSubmit} className="px-8 py-5 space-y-4 text-sm">
+              <p className="italic text-gray-500">
+                Kính gửi: <b>Ban Giám đốc Trung tâm Y tế khu vực Liên Chiểu</b>
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-gray-500">Người đề nghị:</span><br/>
+                  <b className="text-gray-800">{user?.fullName}</b>
+                  {user?.department && <span className="text-gray-500"> — {user.department.name}</span>}
+                </div>
+                <div>
+                  <span className="text-gray-500">Ngày đề nghị:</span><br/>
+                  <b className="text-gray-800">{format(new Date(),'dd/MM/yyyy')}</b>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-blue-700 font-semibold uppercase">Thông tin ca trực gốc</p>
+                <p>• Người trực: <b>{swapTarget.user?.fullName}</b></p>
+                <p>• Ngày trực: <b>{format(new Date(swapTarget.shiftDate),'EEEE, dd/MM/yyyy')}</b></p>
+                <p>• Vị trí trực: <b>{swapTarget.department?.name}</b></p>
+                <p>• Mã ca: <b>{swapTarget.shiftType?.code} — {swapTarget.shiftType?.name}</b></p>
+              </div>
+
               <div>
-                <label className="text-sm font-medium text-gray-700">Người trực thay</label>
+                <label className="block text-gray-700 font-medium mb-1">
+                  1. Người trực thay <span className="text-red-500">*</span>
+                </label>
                 <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required>
-                  <option value="">Chọn người trực thay</option>
+                  className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                  <option value="">— Chọn người trực thay (cùng khoa) —</option>
                   {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
                     <option key={u.id} value={u.id}>{u.fullName} {u.title?`(${u.title})`:''}</option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="text-sm font-medium text-gray-700">Lý do</label>
+                <label className="block text-gray-700 font-medium mb-1">
+                  2. Lý do đổi trực <span className="text-red-500">*</span>
+                </label>
                 <textarea value={swapForm.reason} onChange={e=>setSwapForm({...swapForm,reason:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" rows={3} placeholder="Lý do đổi trực..."/>
+                  className="w-full border rounded-lg px-3 py-2 text-sm" rows={4}
+                  placeholder="VD: Đi công tác, hiếu hỉ gia đình, sự cố cá nhân..." required/>
               </div>
-              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded">
-                ⚠️ Yêu cầu sẽ được gửi tới admin. Đổi trực chỉ có hiệu lực khi admin duyệt.
-              </p>
-              <div className="flex gap-2 pt-2">
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                <b>Cam kết:</b> Tôi xin cam kết các thông tin trên là đúng sự thật. Đã trao đổi và được sự đồng ý của người trực thay.
+                Yêu cầu chỉ có hiệu lực sau khi <b>Ban Giám đốc / Quản trị viên</b> phê duyệt.
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t">
                 <button type="button" onClick={()=>setShowSwapModal(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50">Hủy</button>
+                  className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50">Huỷ</button>
                 <button type="submit"
-                  className="flex-1 bg-orange-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-orange-700">Gửi yêu cầu</button>
+                  className="flex-1 bg-orange-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-orange-700">
+                  📤 Gửi đơn đề nghị
+                </button>
               </div>
             </form>
           </div>

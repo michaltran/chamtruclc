@@ -34,6 +34,10 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng' });
   }
 
+  if (!user.passwordHash) {
+    return res.status(403).json({ error: 'Tài khoản chưa được cấp quyền đăng nhập. Liên hệ quản trị viên.' });
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng' });
