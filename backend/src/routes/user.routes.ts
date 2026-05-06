@@ -21,12 +21,11 @@ router.get('/', authenticate, async (req, res) => {
 
   const users = await prisma.user.findMany({
     where,
-    omit: { passwordHash: true },
     include: { department: { select: { id: true, name: true, code: true } } },
     orderBy: { fullName: 'asc' },
   });
 
-  res.json(users);
+  res.json(users.map(({ passwordHash: _, ...u }) => u));
 });
 
 /**
@@ -53,10 +52,10 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 
   const user = await prisma.user.create({
     data: { ...rest, passwordHash },
-    omit: { passwordHash: true },
   });
 
-  res.status(201).json(user);
+  const { passwordHash: _, ...safeUser } = user;
+  res.status(201).json(safeUser);
 });
 
 /**
@@ -64,11 +63,11 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
  */
 router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
   const updated = await prisma.user.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: req.body,
-    omit: { passwordHash: true },
   });
-  res.json(updated);
+  const { passwordHash: _, ...safeUser } = updated;
+  res.json(safeUser);
 });
 
 /**
@@ -76,7 +75,7 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
  */
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   await prisma.user.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: { isActive: false },
   });
   res.json({ success: true });

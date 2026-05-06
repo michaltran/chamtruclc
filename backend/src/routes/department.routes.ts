@@ -30,7 +30,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 
 router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
   const updated = await prisma.department.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: req.body,
   });
   res.json(updated);

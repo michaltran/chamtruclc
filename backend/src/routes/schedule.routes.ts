@@ -166,7 +166,7 @@ router.patch(
   authenticate,
   authorize('admin', 'department_lead'),
   async (req, res) => {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const existing = await prisma.schedule.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy' });
 
@@ -206,7 +206,7 @@ router.delete(
   authenticate,
   authorize('admin', 'department_lead'),
   async (req, res) => {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const existing = await prisma.schedule.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy' });
 
@@ -228,7 +228,7 @@ router.delete(
  * Duyệt lịch (chỉ admin)
  */
 router.post('/:id/approve', authenticate, authorize('admin'), async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const updated = await prisma.schedule.update({
     where: { id },
     data: {
