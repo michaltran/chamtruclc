@@ -43,6 +43,7 @@ export const authApi = {
 export const scheduleApi = {
   list: (params: { year: number; month: number; departmentId?: string }) =>
     api.get('/schedules', { params }).then((r) => r.data),
+  shiftTypes: () => api.get('/schedules/shift-types').then((r) => r.data),
   create: (data: any) => api.post('/schedules', data).then((r) => r.data),
   bulkCreate: (schedules: any[]) =>
     api.post('/schedules/bulk', { schedules }).then((r) => r.data),

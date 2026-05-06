@@ -31,6 +31,7 @@ export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  const [shiftTypes, setShiftTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{deptId:string, date:string}|null>(null)
@@ -77,6 +78,7 @@ export default function SchedulesPage() {
   useEffect(() => {
     // Load all users (admin) or department users (dept_lead) — backend already filters
     userApi.list().then(setUsers).catch(()=>{})
+    scheduleApi.shiftTypes().then(setShiftTypes).catch(()=>{})
   }, [user])
 
   // Filter staff dropdown by selected duty department: only show users in that dept
@@ -502,6 +504,16 @@ export default function SchedulesPage() {
                 <label className="text-sm font-medium text-gray-700">Ngày trực</label>
                 <input type="date" value={form.shiftDate} onChange={e=>setForm({...form,shiftDate:e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required/>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Mã ca trực <span className="text-gray-400 text-xs">(ký hiệu chấm trực)</span></label>
+                <select value={form.shiftTypeId} onChange={e=>setForm({...form,shiftTypeId:e.target.value})}
+                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+                  <option value="">— Tự động chọn theo ngày —</option>
+                  {shiftTypes.map(st=>(
+                    <option key={st.id} value={st.id}>{st.code} — {st.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Ghi chú</label>

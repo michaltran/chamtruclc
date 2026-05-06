@@ -14,19 +14,34 @@ const createScheduleSchema = z.object({
   note: z.string().optional(),
 });
 
-async function getDefaultShiftType(prisma: PrismaClient) {
-  let st = await prisma.shiftType.findFirst({ where: { code: 'T' } });
+/**
+ * Pick shift type smartly based on the date:
+ * - Holiday → L
+ * - Saturday/Sunday → C
+ * - Weekday → T
+ * (Caller chỉ định trước để override → caller logic)
+ */
+async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date) {
+  const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: date } });
+  let code: 'T' | 'C' | 'L' = 'T';
+  if (isHoliday) code = 'L';
+  else if ([0, 6].includes(date.getDay())) code = 'C';
+  let st = await prisma.shiftType.findFirst({ where: { code } });
+  if (!st) {
+    // fallback to any code = T
+    st = await prisma.shiftType.findFirst({ where: { code: 'T' } });
+  }
   if (!st) {
     st = await prisma.shiftType.create({
       data: {
         code: 'T',
-        name: 'Thường trực',
-        startTime: new Date('1970-01-01T17:00:00Z'),
-        endTime: new Date('1970-01-02T08:00:00Z'),
-        durationHours: 15,
+        name: 'Trực bình thường trong tuần 24/24',
+        startTime: new Date('1970-01-01T07:00:00Z'),
+        endTime: new Date('1970-01-02T07:00:00Z'),
+        durationHours: 24,
         baseAmount: 0,
-        weekendCoef: 1.5,
-        holidayCoef: 2.0,
+        weekendCoef: 1.0,
+        holidayCoef: 1.0,
         color: '#3B82F6',
         isActive: true,
       },
@@ -35,10 +50,35 @@ async function getDefaultShiftType(prisma: PrismaClient) {
   return st;
 }
 
+// keep backward compat for places that called the old function name
+async function getDefaultShiftType(prisma: PrismaClient) {
+  return getDefaultShiftTypeForDate(prisma, new Date());
+}
+
 /**
  * GET /api/schedules?year=2026&month=5&departmentId=...
  * Lấy lịch trực theo tháng
  */
+/**
+ * GET /api/schedules/shift-types
+ */
+router.get('/shift-types', authenticate, async (_req, res) => {
+  const types = await prisma.shiftType.findMany({
+    where: { isActive: true },
+    orderBy: { code: 'asc' },
+  });
+  // Order: T, C, L, TC, CC, LC, THS, CHS, LHS
+  const order = ['T','C','L','TC','CC','LC','THS','CHS','LHS'];
+  types.sort((a, b) => {
+    const ai = order.indexOf(a.code), bi = order.indexOf(b.code);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.code.localeCompare(b.code);
+  });
+  res.json(types);
+});
+
 router.get('/', authenticate, async (req, res) => {
   const year = parseInt(req.query.year as string) || new Date().getFullYear();
   const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
@@ -114,7 +154,7 @@ router.post(
     }
 
     try {
-      const shiftTypeId = data.shiftTypeId || (await getDefaultShiftType(prisma)).id;
+      const shiftTypeId = data.shiftTypeId || (await getDefaultShiftTypeForDate(prisma, new Date(data.shiftDate))).id;
       const schedule = await prisma.schedule.create({
         data: {
           userId: data.userId,
@@ -175,7 +215,7 @@ router.post(
         continue;
       }
       try {
-        const shiftTypeId = item.shiftTypeId || (await getDefaultShiftType(prisma)).id;
+        const shiftTypeId = item.shiftTypeId || (await getDefaultShiftTypeForDate(prisma, new Date(item.shiftDate))).id;
         const s = await prisma.schedule.create({
           data: {
             userId: item.userId,
