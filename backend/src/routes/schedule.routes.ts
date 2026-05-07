@@ -240,12 +240,16 @@ router.post(
 
       res.status(201).json(schedule);
     } catch (err: any) {
-      if (err.code === 'P2002') {
+      // P2002 từ prisma.create + 23505 từ raw INSERT — đều là unique violation
+      const isDup = err?.code === 'P2002' || err?.meta?.code === '23505'
+        || /already exists|duplicate key/i.test(err?.message || '');
+      if (isDup) {
         return res.status(409).json({
-          error: 'Người này đã có ca trực cùng loại trong ngày này',
+          error: 'Người này đã có ca trực cùng loại trong ngày này. Vui lòng kiểm tra hoặc xoá ca cũ trước khi thêm.',
         });
       }
-      throw err;
+      console.error('[schedule create]', err);
+      return res.status(500).json({ error: 'Lỗi khi tạo lịch trực. Vui lòng thử lại.' });
     }
   }
 );
