@@ -117,9 +117,13 @@ export default function SchedulesPage() {
     return new Set<string>(ids)
   }, [user])
 
+  // Khoa "ảo" — chỉ tồn tại để gộp ở chấm trực, không hiện ở lịch trực
+  const VIRTUAL_PARENT_CODES = new Set(['CDHA'])
+
   const visibleDepartments = useMemo(() => {
-    if (!allowedDeptIds) return departments
-    return departments.filter(d => allowedDeptIds.has(d.id))
+    let arr = departments.filter(d => !VIRTUAL_PARENT_CODES.has(d.code))
+    if (allowedDeptIds) arr = arr.filter(d => allowedDeptIds.has(d.id))
+    return arr
   }, [departments, allowedDeptIds])
 
   const { weekStart, weekDays, daysInMonth, maxWeekOffset } = useMemo(() => {
@@ -429,7 +433,7 @@ export default function SchedulesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {departments.map((dept, ri) => {
+                  {visibleDepartments.map((dept, ri) => {
                     const isLanhDao = dept.code === 'LANHDAO'
                     const rowBg = isLanhDao ? 'bg-amber-50' : ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     return (
@@ -792,7 +796,7 @@ export default function SchedulesPage() {
                   className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required
                   disabled={!!allowedDeptIds && allowedDeptIds.size === 1}>
                   <option value="">Chọn khoa/phòng</option>
-                  {(allowedDeptIds ? departments.filter(d=>allowedDeptIds.has(d.id)) : departments)
+                  {visibleDepartments
                     .map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
                 {allowedDeptIds && allowedDeptIds.size === 1 && (

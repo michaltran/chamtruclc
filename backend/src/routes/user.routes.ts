@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { authenticate, authorize } from '../middleware/auth';
+import { getAccessibleDeptIds } from '../lib/dept-tree';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -24,7 +25,17 @@ router.get('/', authenticate, async (req, res) => {
   const where: any = { isActive: true };
 
   if (req.user!.role === 'department_lead') {
-    where.departmentId = req.user!.departmentId;
+    // Mở rộng: dept_lead thấy nhân viên thuộc khoa mình + các khoa con (CDHA → SAM/CT/XQUANG)
+    const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    if (allowedIds && allowedIds.size > 0) {
+      const ids = Array.from(allowedIds);
+      where.OR = [
+        { departmentId: { in: ids } },
+        { userDepartments: { some: { departmentId: { in: ids } } } },
+      ];
+    } else {
+      where.departmentId = req.user!.departmentId;
+    }
   } else if (req.query.departmentId) {
     where.departmentId = req.query.departmentId as string;
   }
@@ -202,16 +213,16 @@ router.post('/', authenticate, authorize('admin', 'department_lead'), async (req
 
   const { password, departmentIds, departmentId, ...rest } = parsed.data;
 
-  // Dept_lead: chặn role admin/department_lead, chỉ tạo nhân viên trong khoa mình
+  // Dept_lead: chặn role admin/department_lead, chỉ tạo nhân viên trong khoa mình + khoa con
   if (req.user!.role === 'department_lead') {
     if (rest.role && rest.role !== 'staff') {
       return res.status(403).json({ error: 'Trưởng đơn vị chỉ tạo được tài khoản nhân viên thường' });
     }
     rest.role = 'staff';
-    const myDept = req.user!.departmentId;
-    const allowed = (departmentIds || (departmentId ? [departmentId] : [])).every(d => d === myDept);
-    if (!allowed) {
-      return res.status(403).json({ error: 'Chỉ được tạo nhân viên thuộc khoa của bạn' });
+    const allowed = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    const requested = departmentIds || (departmentId ? [departmentId] : []);
+    if (!allowed || !requested.every(d => allowed.has(d))) {
+      return res.status(403).json({ error: 'Chỉ được tạo nhân viên thuộc khoa của bạn (hoặc khoa con)' });
     }
   }
 
@@ -243,16 +254,19 @@ router.post('/', authenticate, authorize('admin', 'department_lead'), async (req
  * PATCH /api/users/:id — admin sua bat ky; dept_lead chi sua user trong khoa minh
  */
 router.patch('/:id', authenticate, authorize('admin', 'department_lead'), async (req, res) => {
-  // Dept_lead: chỉ được sửa user thuộc khoa mình
+  // Dept_lead: chỉ sửa user thuộc khoa mình hoặc khoa con (CDHA → SAM/CT/XQUANG)
   if (req.user!.role === 'department_lead') {
     const target = await prisma.user.findUnique({
       where: { id: req.params.id as string },
       include: { userDepartments: true },
     });
     if (!target) return res.status(404).json({ error: 'Không tìm thấy' });
-    const inMyDept = target.departmentId === req.user!.departmentId
-      || target.userDepartments.some(ud => ud.departmentId === req.user!.departmentId);
-    if (!inMyDept) {
+    const allowed = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    const inScope = !!allowed && (
+      (target.departmentId && allowed.has(target.departmentId)) ||
+      target.userDepartments.some(ud => allowed.has(ud.departmentId))
+    );
+    if (!inScope) {
       return res.status(403).json({ error: 'Chỉ được sửa nhân viên thuộc khoa của bạn' });
     }
     // Không cho dept_lead đổi role hoặc chuyển user ra khỏi dept của mình
@@ -345,9 +359,12 @@ router.delete('/:id', authenticate, authorize('admin', 'department_lead'), async
       include: { userDepartments: true },
     });
     if (!target) return res.status(404).json({ error: 'Không tìm thấy' });
-    const inMyDept = target.departmentId === req.user!.departmentId
-      || target.userDepartments.some(ud => ud.departmentId === req.user!.departmentId);
-    if (!inMyDept) return res.status(403).json({ error: 'Chỉ được xóa nhân viên thuộc khoa của bạn' });
+    const allowed = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    const inScope = !!allowed && (
+      (target.departmentId && allowed.has(target.departmentId)) ||
+      target.userDepartments.some(ud => allowed.has(ud.departmentId))
+    );
+    if (!inScope) return res.status(403).json({ error: 'Chỉ được xóa nhân viên thuộc khoa của bạn' });
   }
   await prisma.user.update({
     where: { id: req.params.id as string },
