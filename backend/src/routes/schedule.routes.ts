@@ -36,19 +36,31 @@ function formatZodError(err: any): string {
     .join(' | ');
 }
 
+// Khoa cấp cứu (cho ca TC/CC/LC)
+const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
+// Khoa hồi sức / hồi tỉnh (cho ca THS/CHS/LHS)
+const RECOVERY_DEPT_CODES = new Set(['GMHS']);
+
 /**
- * Theo quy định: chỉ có 3 mã ca trực:
- *   T = Trực ngày thường (weekday)
- *   C = Trực cuối tuần (T7/CN)
- *   L = Trực ngày Lễ
- * Khoa (chuyên môn / Lãnh đạo / cấp cứu) không ảnh hưởng tới mã ca —
- * chỉ ngày trong tuần + lịch lễ quyết định.
+ * Pick shift type theo (date, departmentCode):
+ *   normal/weekday=T   weekend=C   holiday=L
+ *   emergency/weekday=TC  weekend=CC  holiday=LC
+ *   recovery /weekday=THS weekend=CHS holiday=LHS
+ *
+ * Khoa Lãnh đạo (LANHDAO) dùng chung T/C/L với khoa thường —
+ * không có mã riêng (TLD/CLD/LLD đã bỏ).
  */
-async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, _departmentCode?: string) {
+async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, departmentCode?: string) {
   const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: dateOnly } });
   const isWeekend = [0, 6].includes(date.getDay());
-  const code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
+  const isEmerg = !!departmentCode && EMERGENCY_DEPT_CODES.has(departmentCode);
+  const isRecov = !!departmentCode && RECOVERY_DEPT_CODES.has(departmentCode);
+
+  let code: string;
+  if (isRecov) code = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
+  else if (isEmerg) code = isHoliday ? 'LC' : isWeekend ? 'CC' : 'TC';
+  else code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
 
   let st = await prisma.shiftType.findFirst({ where: { code } });
   if (!st) {
@@ -90,8 +102,8 @@ router.get('/shift-types', authenticate, async (_req, res) => {
     where: { isActive: true },
     orderBy: { code: 'asc' },
   });
-  // Order: T, C, L (chỉ còn 3 mã)
-  const order = ['T','C','L'];
+  // Order: T/C/L thường, TC/CC/LC cấp cứu, THS/CHS/LHS hồi sức
+  const order = ['T','C','L','TC','CC','LC','THS','CHS','LHS'];
   types.sort((a, b) => {
     const ai = order.indexOf(a.code), bi = order.indexOf(b.code);
     if (ai !== -1 && bi !== -1) return ai - bi;

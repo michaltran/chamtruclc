@@ -47,6 +47,7 @@ const titleRank = (title?: string) => {
   return 50
 }
 
+// 9 mã chuẩn (không có TLD/CLD/LLD — Lãnh đạo dùng chung T/C/L)
 const SHIFT_CODE_COLORS: Record<string, string> = {
   T:   'bg-blue-100 text-blue-800',
   C:   'bg-green-100 text-green-800',
@@ -57,9 +58,6 @@ const SHIFT_CODE_COLORS: Record<string, string> = {
   THS: 'bg-indigo-100 text-indigo-800',
   CHS: 'bg-purple-100 text-purple-800',
   LHS: 'bg-pink-100 text-pink-800',
-  TLD: 'bg-amber-100 text-amber-900',
-  CLD: 'bg-red-100 text-red-900',
-  LLD: 'bg-rose-200 text-rose-900',
 }
 
 const SHIFT_CODE_NAMES: Record<string, string> = {
@@ -72,9 +70,6 @@ const SHIFT_CODE_NAMES: Record<string, string> = {
   THS: 'Phiên trực ngày thường hồi sức hồi tỉnh 24/24',
   CHS: 'Phiên trực thứ 7, CN hồi sức hồi tỉnh 24/24',
   LHS: 'Phiên trực ngày Lễ, tết hồi sức hồi tỉnh 24/24',
-  TLD: 'Trực Lãnh đạo ngày thường 24/24',
-  CLD: 'Trực Lãnh đạo thứ 7, CN 24/24',
-  LLD: 'Trực Lãnh đạo ngày Lễ, tết 24/24',
 }
 
 // Đúng layout sheet "Chấm trực ALL T*" của TTYT KV Liên Chiểu:
@@ -87,8 +82,8 @@ const SHIFT_CODE_NAMES: Record<string, string> = {
 //   Tổng cộng      = sum 9 ô đếm
 const COUNT_COLS = ['TC','T','THS','CC','C','CHS','LC','L','LHS'] as const
 type CountCode = typeof COUNT_COLS[number]
-// Mã ca lãnh đạo riêng — dùng cho bảng tách Lãnh đạo
-const LD_COUNT_COLS = ['TLD','CLD','LLD'] as const
+// Bảng Lãnh đạo cũng dùng T/C/L (không có mã riêng)
+const LD_COUNT_COLS = ['T','C','L'] as const
 type LdCode = typeof LD_COUNT_COLS[number]
 
 export default function ChamTrucPage() {
@@ -465,11 +460,11 @@ export default function ChamTrucPage() {
               Object.keys(map).forEach(d => { dayTotals[+d] = (dayTotals[+d] || 0) + 1 })
             })
             // Code totals
-            const codeTotals: Record<string, number> = { TLD:0, CLD:0, LLD:0 }
+            const codeTotals: Record<string, number> = { T:0, C:0, L:0 }
             Object.values(groupCounts).forEach(c => {
               LD_COUNT_COLS.forEach(k => { codeTotals[k] += c[k] || 0 })
             })
-            const grand = codeTotals.TLD + codeTotals.CLD + codeTotals.LLD
+            const grand = codeTotals.T + codeTotals.C + codeTotals.L
             return (
               <div key="ld-group" className="bg-white rounded-xl shadow-sm overflow-hidden print:rounded-none print:shadow-none print:break-inside-avoid border-2 border-amber-300">
                 <div className="bg-amber-500 text-white px-4 py-2 print:bg-amber-100 print:text-amber-900">
@@ -497,7 +492,7 @@ export default function ChamTrucPage() {
                       {group.users.map((u: any, idx: number) => {
                         const userAttend = groupAttend[u.id] || {}
                         const userCounts = groupCounts[u.id] || {}
-                        const total = (userCounts.TLD||0) + (userCounts.CLD||0) + (userCounts.LLD||0)
+                        const total = (userCounts.T||0) + (userCounts.C||0) + (userCounts.L||0)
                         return (
                           <tr key={u.id} className="hover:bg-amber-50/40">
                             <td className="border px-2 py-1 text-center text-gray-500">{idx+1}</td>
