@@ -10,11 +10,18 @@ const DUTY_ORDER = [
   'LANHDAO','CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
 
-// Theo quy định: chỉ có 3 mã ca T/C/L
+// 9 mã ca chuẩn: T/C/L (thường), TC/CC/LC (cấp cứu), THS/CHS/LHS (hồi sức).
+// Khoa Lãnh đạo dùng chung T/C/L (không có mã riêng).
 const SHIFT_CODE_COLORS: Record<string, string> = {
-  T: 'bg-blue-100 text-blue-800 border-blue-300',
-  C: 'bg-green-100 text-green-800 border-green-300',
-  L: 'bg-orange-100 text-orange-800 border-orange-300',
+  T:   'bg-blue-100 text-blue-800 border-blue-300',
+  C:   'bg-green-100 text-green-800 border-green-300',
+  L:   'bg-orange-100 text-orange-800 border-orange-300',
+  TC:  'bg-teal-100 text-teal-800 border-teal-300',
+  CC:  'bg-red-100 text-red-800 border-red-300',
+  LC:  'bg-yellow-100 text-yellow-800 border-yellow-300',
+  THS: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+  CHS: 'bg-purple-100 text-purple-800 border-purple-300',
+  LHS: 'bg-pink-100 text-pink-800 border-pink-300',
 }
 
 // Title được tính là Bác sĩ (cột BS): bao gồm cả Trưởng khoa, Phó khoa, Giám đốc
