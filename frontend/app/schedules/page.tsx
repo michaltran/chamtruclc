@@ -310,29 +310,29 @@ export default function SchedulesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-3 py-4">
+      <div className="max-w-[1720px] mx-auto px-2 py-3">
         {/* Header */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <h1 className="text-lg font-bold text-gray-800">Lịch Trực Toàn Viện</h1>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800">Lịch Trực Toàn Viện</h1>
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <select value={month} onChange={e=>{setMonth(+e.target.value);setWeekOffset(0)}}
-              className="border rounded-lg px-2 py-1 text-sm">
+              className="border rounded-lg px-3 py-1.5 text-base font-medium">
               {Array.from({length:12},(_,i)=>i+1).map(m=>(
                 <option key={m} value={m}>Tháng {m}</option>
               ))}
             </select>
             <select value={year} onChange={e=>{setYear(+e.target.value);setWeekOffset(0)}}
-              className="border rounded-lg px-2 py-1 text-sm">
+              className="border rounded-lg px-3 py-1.5 text-base font-medium">
               {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
             </select>
-            <div className="flex rounded-lg border overflow-hidden text-sm">
-              <button onClick={()=>setViewMode('week')} className={`px-3 py-1 ${viewMode==='week'?'bg-blue-600 text-white':'bg-white text-gray-700 hover:bg-gray-50'}`}>Tuần</button>
-              <button onClick={()=>setViewMode('month')} className={`px-3 py-1 ${viewMode==='month'?'bg-blue-600 text-white':'bg-white text-gray-700 hover:bg-gray-50'}`}>Tháng</button>
+            <div className="flex rounded-lg border overflow-hidden text-base font-medium">
+              <button onClick={()=>setViewMode('week')} className={`px-4 py-1.5 ${viewMode==='week'?'bg-blue-600 text-white':'bg-white text-gray-700 hover:bg-gray-50'}`}>Tuần</button>
+              <button onClick={()=>setViewMode('month')} className={`px-4 py-1.5 ${viewMode==='month'?'bg-blue-600 text-white':'bg-white text-gray-700 hover:bg-gray-50'}`}>Tháng</button>
             </div>
             {canEdit && (
               <>
                 <button onClick={handleDuplicate}
-                  className="bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-purple-700"
+                  className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-purple-700"
                   title="Sao chép lịch tháng trước">
                   ⎘ Tự tạo từ tháng trước
                 </button>
@@ -368,7 +368,7 @@ export default function SchedulesPage() {
                   </button>
                 )}
                 <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
-                  className="bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-blue-700">
+                  className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-base font-semibold hover:bg-blue-700 shadow-sm">
                   + Thêm ca trực
                 </button>
               </>
@@ -383,30 +383,30 @@ export default function SchedulesPage() {
           <div id="schedule-export-area">
             {/* Excel-style title */}
             <div className="text-center bg-white rounded-t-xl border border-b-0 border-gray-200 py-3 px-4">
-              <img src="/logo.png" alt="" className="h-10 w-10 mx-auto mb-1 object-contain"/>
-              <p className="text-[10px] uppercase text-gray-600">SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG — TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</p>
-              <h2 className="text-base font-bold text-blue-900 uppercase tracking-wide mt-1">
+              <img src="/logo.png" alt="" className="h-12 w-12 mx-auto mb-1 object-contain"/>
+              <p className="text-xs uppercase text-gray-600">SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG — TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</p>
+              <h2 className="text-xl font-bold text-blue-900 uppercase tracking-wide mt-1">
                 LỊCH TRỰC TOÀN VIỆN THÁNG {month}/{year}
               </h2>
-              <p className="text-xs text-gray-600 mt-1">
-                Từ ngày {format(weekStart,'dd/MM/yyyy')} đến ngày {format(weekDays[6],'dd/MM/yyyy')}
+              <p className="text-sm text-gray-600 mt-1">
+                Từ ngày <b>{format(weekStart,'dd/MM/yyyy')}</b> đến ngày <b>{format(weekDays[6],'dd/MM/yyyy')}</b>
                 <span className="ml-3 text-gray-400">— Tuần {weekOffset+1}</span>
               </p>
             </div>
             {/* Week navigation */}
-            <div className="flex items-center justify-between bg-gray-50 px-4 py-1.5 border-x border-gray-200 no-export">
+            <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-x border-gray-200 no-export">
               <button onClick={()=>setWeekOffset(w=>Math.max(0,w-1))} disabled={weekOffset===0}
-                className="text-gray-600 hover:text-blue-600 disabled:opacity-30 text-base font-bold px-2">‹ Tuần trước</button>
-              <button onClick={()=>window.print()} className="text-xs text-gray-500 hover:text-blue-600">🖨️ In tuần này</button>
+                className="text-gray-700 hover:text-blue-600 disabled:opacity-30 text-base font-bold px-3 py-1 rounded hover:bg-blue-50">‹ Tuần trước</button>
+              <button onClick={()=>window.print()} className="text-sm text-gray-500 hover:text-blue-600">🖨️ In tuần này</button>
               <button onClick={()=>setWeekOffset(w=>Math.min(maxWeekOffset,w+1))}
-                className="text-gray-600 hover:text-blue-600 text-base font-bold px-2">Tuần sau ›</button>
+                className="text-gray-700 hover:text-blue-600 text-base font-bold px-3 py-1 rounded hover:bg-blue-50">Tuần sau ›</button>
             </div>
 
             <div id="schedule-table-container" className="overflow-x-auto rounded-b-xl shadow-sm border border-t-0 border-gray-200">
-              <table className="min-w-full border-collapse text-xs bg-white">
+              <table className="w-full border-collapse text-sm bg-white" style={{tableLayout:'fixed'}}>
                 <thead>
                   <tr className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 text-white shadow-md">
-                    <th rowSpan={2} className="sticky left-0 z-20 bg-gradient-to-br from-blue-800 to-blue-900 px-4 py-3 text-left font-bold uppercase tracking-wider border-r-2 border-blue-300/50 min-w-[160px] text-[12px]">
+                    <th rowSpan={2} className="sticky left-0 z-20 bg-gradient-to-br from-blue-800 to-blue-900 px-3 py-3 text-left font-bold uppercase tracking-wider border-r-2 border-blue-300/50 text-sm" style={{width:'180px'}}>
                       <div className="flex items-center gap-2">
                         <span className="inline-block w-1 h-6 bg-yellow-300 rounded-sm"></span>
                         Thành phần trực
@@ -420,25 +420,25 @@ export default function SchedulesPage() {
                       const dowLabel = isSunday ? 'CHỦ NHẬT' : isSaturday ? 'THỨ 7' : `THỨ ${dow + 1}`
                       return (
                         <th key={d.getTime()} colSpan={2}
-                          className={`px-2 py-2 text-center border-r border-blue-400/40 min-w-[130px] transition
+                          className={`px-2 py-2 text-center border-r border-blue-400/40 transition
                             ${!inMonth ? 'opacity-40' : ''}
                             ${isSunday ? 'bg-gradient-to-b from-rose-600 to-rose-700' : ''}
                             ${isSaturday ? 'bg-gradient-to-b from-orange-500 to-orange-600' : ''}`}>
-                          <div className="text-[10px] font-medium opacity-80 tracking-wide">{dowLabel}</div>
-                          <div className="text-[15px] font-bold leading-none mt-0.5">{format(d,'dd/MM')}</div>
+                          <div className="text-xs font-semibold opacity-90 tracking-wide">{dowLabel}</div>
+                          <div className="text-lg font-bold leading-tight mt-0.5">{format(d,'dd/MM')}</div>
                         </th>
                       )
                     })}
                   </tr>
-                  <tr className="bg-blue-50 text-blue-900 text-[10px] border-t border-blue-200">
+                  <tr className="bg-blue-50 text-blue-900 text-xs border-t border-blue-200">
                     {weekDays.flatMap(d => {
                       const dow = d.getDay()
                       const tone = dow === 0 ? 'bg-rose-50/70' : dow === 6 ? 'bg-orange-50/70' : 'bg-blue-50'
                       return [
-                        <th key={`${d.getTime()}-bs`} className={`${tone} px-1 py-1.5 border-r border-blue-100 font-bold text-center w-[65px] uppercase tracking-wide`}>
+                        <th key={`${d.getTime()}-bs`} className={`${tone} px-1 py-2 border-r border-blue-100 font-bold text-center uppercase tracking-wide text-[11px]`}>
                           <span className="text-blue-700">BS</span>
                         </th>,
-                        <th key={`${d.getTime()}-dd`} className={`${tone} px-1 py-1.5 border-r border-blue-200 font-bold text-center w-[65px] uppercase tracking-wide`}>
+                        <th key={`${d.getTime()}-dd`} className={`${tone} px-1 py-2 border-r border-blue-200 font-bold text-center uppercase tracking-wide text-[11px]`}>
                           <span className="text-emerald-700">ĐD/HS/KTV</span>
                         </th>,
                       ]
@@ -451,10 +451,10 @@ export default function SchedulesPage() {
                     const rowBg = isLanhDao ? 'bg-amber-50' : ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     return (
                       <tr key={dept.id} className={`${rowBg} border-b border-gray-300 hover:bg-blue-50/30 ${isLanhDao ? 'border-b-2 border-amber-300' : ''}`}>
-                        <td className={`sticky left-0 z-10 ${rowBg} px-3 py-2 font-semibold border-r border-gray-300 text-[11px] uppercase tracking-wide ${isLanhDao ? 'text-amber-800' : 'text-blue-900'}`}>
-                          <div className="flex items-center gap-1">
-                            {isLanhDao && <span className="text-amber-600">★</span>}
-                            <span>{dept.name}</span>
+                        <td className={`sticky left-0 z-10 ${rowBg} px-3 py-2 font-semibold border-r border-gray-300 text-sm uppercase tracking-wide ${isLanhDao ? 'text-amber-800' : 'text-blue-900'}`}>
+                          <div className="flex items-center gap-1.5 leading-tight">
+                            {isLanhDao && <span className="text-amber-600 text-base">★</span>}
+                            <span className="break-words">{dept.name}</span>
                             {lockedDepts.has(dept.id) && (
                               <span className="text-amber-600" title="Đã nộp/duyệt — chỉ admin sửa được">🔒</span>
                             )}
@@ -467,39 +467,39 @@ export default function SchedulesPage() {
                           const cell = schedMap[dateStr]?.[dept.id] || { bs: [], dd: [] }
                           const renderCell = (items: any[], type: 'BS'|'DD') => (
                             <td key={`${dateStr}-${dept.id}-${type}`}
-                              className={`align-top border border-gray-300 px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''}  ${isWeekend?'bg-orange-50/40':''}`}>
-                              <div className="space-y-1 min-h-[44px]">
+                              className={`align-top border border-gray-300 px-1.5 py-1.5 ${!inMonth?'bg-gray-100 opacity-30':''} ${isWeekend?'bg-orange-50/40':''}`}>
+                              <div className="space-y-1 min-h-[60px]">
                                 {items.map(s=>{
                                   const code = s.shiftType?.code || 'T'
                                   const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
                                   const isLD = dept.code === 'LANHDAO'
                                   const tone = isLD ? 'bg-amber-50 border border-amber-300' : type==='BS' ? 'bg-blue-50 border border-blue-200' : 'bg-green-50 border border-green-200'
                                   return (
-                                    <div key={s.id} className={`group rounded px-1 py-0.5 ${tone}`}>
-                                      <div className="flex items-center gap-1 text-[10px]">
-                                        <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
-                                        <span className="flex-1 leading-tight font-medium truncate" title={s.user?.fullName}>
+                                    <div key={s.id} className={`group rounded-md px-1.5 py-1 ${tone}`}>
+                                      <div className="flex items-center gap-1.5 text-[13px]">
+                                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
+                                        <span className="flex-1 leading-tight font-semibold text-gray-800 truncate" title={s.user?.fullName}>
                                           {s.user?.fullName}
                                         </span>
-                                        <div className="hidden group-hover:flex gap-0.5 shrink-0">
+                                        <div className="hidden group-hover:flex gap-1 shrink-0">
                                           {canEdit && s.status==='draft' && isAdmin && (
-                                            <button onClick={()=>handleApprove(s.id)} className="text-green-600 hover:text-green-800" title="Duyệt">✓</button>
+                                            <button onClick={()=>handleApprove(s.id)} className="text-green-600 hover:text-green-800 text-sm" title="Duyệt">✓</button>
                                           )}
                                           {!canEdit && s.userId === user?.id && (
-                                            <button onClick={()=>openSwapModal(s)} className="text-orange-500 hover:text-orange-700" title="Báo đổi trực">⇄</button>
+                                            <button onClick={()=>openSwapModal(s)} className="text-orange-500 hover:text-orange-700 text-sm" title="Báo đổi trực">⇄</button>
                                           )}
-                                          {canEdit && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600" title="Xoá">✕</button>}
+                                          {canEdit && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm" title="Xoá">✕</button>}
                                         </div>
                                       </div>
                                       {dept.code === 'LANHDAO' && s.user?.phone && (
-                                        <div className="text-[9px] text-amber-700 font-mono ml-5 mt-0.5">📞 {s.user.phone}</div>
+                                        <div className="text-[11px] text-amber-700 font-mono ml-6 mt-0.5">📞 {s.user.phone}</div>
                                       )}
                                     </div>
                                   )
                                 })}
                                 {canEdit && inMonth && (
                                   <button onClick={()=>openAddForm(dept.id, dateStr)}
-                                    className="w-full text-gray-300 hover:text-blue-500 text-center leading-none opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity text-base">
+                                    className="w-full text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded text-center leading-none opacity-0 group-hover:opacity-100 hover:opacity-100 transition-all text-lg py-0.5">
                                     +
                                   </button>
                                 )}
@@ -511,22 +511,22 @@ export default function SchedulesPage() {
                             const all = [...cell.bs, ...cell.dd]
                             return [(
                               <td key={`${dateStr}-${dept.id}-LD`} colSpan={2}
-                                className={`align-top border border-amber-300 px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''} ${isWeekend?'bg-orange-50/40':''}`}>
-                                <div className="space-y-1 min-h-[44px]">
+                                className={`align-top border border-amber-300 px-1.5 py-1.5 ${!inMonth?'bg-gray-100 opacity-30':''} ${isWeekend?'bg-orange-50/40':''}`}>
+                                <div className="space-y-1 min-h-[60px]">
                                   {all.map(s=>{
                                     const code = s.shiftType?.code || 'T'
                                     const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
                                     return (
-                                      <div key={s.id} className="group rounded px-1 py-0.5 bg-amber-50 border border-amber-300">
-                                        <div className="flex items-center gap-1 text-[10px]">
-                                          <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${codeCls}`}>{code}</span>
-                                          <span className="flex-1 leading-tight font-medium truncate">{s.user?.fullName}</span>
-                                          <div className="hidden group-hover:flex gap-0.5 shrink-0">
-                                            {isAdmin && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600">✕</button>}
+                                      <div key={s.id} className="group rounded-md px-1.5 py-1 bg-amber-50 border border-amber-300">
+                                        <div className="flex items-center gap-1.5 text-[13px]">
+                                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 ${codeCls}`}>{code}</span>
+                                          <span className="flex-1 leading-tight font-semibold text-amber-900 truncate">{s.user?.fullName}</span>
+                                          <div className="hidden group-hover:flex gap-1 shrink-0">
+                                            {isAdmin && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm">✕</button>}
                                           </div>
                                         </div>
                                         {s.user?.phone && (
-                                          <div className="text-[9px] text-amber-700 font-mono ml-5 mt-0.5">📞 {s.user.phone}</div>
+                                          <div className="text-[11px] text-amber-700 font-mono ml-6 mt-0.5">📞 {s.user.phone}</div>
                                         )}
                                       </div>
                                     )
@@ -534,7 +534,7 @@ export default function SchedulesPage() {
                                   {/* Chỉ admin được nhập lãnh đạo */}
                                   {isAdmin && inMonth && all.length === 0 && (
                                     <button onClick={()=>openAddForm(dept.id, dateStr)}
-                                      className="w-full text-amber-300 hover:text-amber-600 text-center leading-none opacity-50 hover:opacity-100 text-base">
+                                      className="w-full text-amber-400 hover:text-amber-700 hover:bg-amber-100/50 rounded text-center leading-none opacity-60 hover:opacity-100 text-sm py-1 font-medium">
                                       + Thêm
                                     </button>
                                   )}
@@ -552,10 +552,12 @@ export default function SchedulesPage() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 mt-3 text-xs text-gray-500 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-100 rounded inline-block"/>Bác sĩ (BS)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-100 rounded inline-block"/>Điều dưỡng/Hộ sinh/KTV</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-50 border border-orange-200 rounded inline-block"/>Cuối tuần</span>
+            <div className="flex gap-5 mt-3 text-sm text-gray-600 flex-wrap items-center">
+              <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-blue-100 border border-blue-200 rounded inline-block"/>Bác sĩ (BS)</span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-green-100 border border-green-200 rounded inline-block"/>Điều dưỡng/Hộ sinh/KTV</span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-amber-100 border border-amber-300 rounded inline-block"/>Lãnh đạo</span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-orange-50 border border-orange-200 rounded inline-block"/>Cuối tuần</span>
+              <span className="text-gray-400 text-xs italic">— Di chuột vào ô để hiện nút sửa/xóa, dấu + để thêm ca</span>
             </div>
           </div>
         ) : (

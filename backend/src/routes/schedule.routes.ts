@@ -249,7 +249,7 @@ router.post(
         || /already exists|duplicate key/i.test(err?.message || '');
       if (isDup) {
         return res.status(409).json({
-          error: 'Người này đã có ca trực cùng loại trong ngày này. Vui lòng kiểm tra hoặc xoá ca cũ trước khi thêm.',
+          error: 'Người này đã có ca trực cùng loại tại khoa này trong ngày. Có thể thêm ở khoa khác (VD: CT/Xquang, hoặc Lãnh đạo) — không thể thêm trùng cùng khoa.',
         });
       }
       console.error('[schedule create]', err);

@@ -112,8 +112,9 @@ CREATE TABLE schedules (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
-    -- Một người không thể trực 2 ca trùng giờ trong cùng ngày
-    CONSTRAINT unique_user_shift_date UNIQUE (user_id, shift_date, shift_type_id)
+    -- Một người không thể trực 2 ca cùng loại, cùng khoa, trong cùng ngày
+    -- (cho phép cùng 1 người trực ở 2 khoa khác nhau cùng ngày: VD CT + Xquang, hoặc khoa chuyên môn + Lãnh đạo)
+    CONSTRAINT unique_user_shift_date UNIQUE (user_id, shift_date, shift_type_id, department_id)
 );
 
 CREATE INDEX idx_schedules_date ON schedules(shift_date);
