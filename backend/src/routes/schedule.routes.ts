@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { authenticate, authorize, checkDepartmentAccess } from '../middleware/auth';
+import { getAccessibleDeptIds } from '../lib/dept-tree';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -162,9 +163,12 @@ router.post(
 
     const data = parsed.data;
 
-    // Department lead chỉ tạo lịch cho khoa mình
-    if (!checkDepartmentAccess(req, data.departmentId)) {
-      return res.status(403).json({ error: 'Không có quyền tạo lịch cho khoa này' });
+    // Department lead: cho phép truy cập khoa mình + các khoa con (CDHA → SAM/CT/XQUANG)
+    if (req.user!.role === 'department_lead') {
+      const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+      if (allowedIds && !allowedIds.has(data.departmentId)) {
+        return res.status(403).json({ error: 'Không có quyền tạo lịch cho khoa này' });
+      }
     }
 
     // Lock: dept_lead cannot add new schedules to a month already submitted
@@ -263,9 +267,12 @@ router.post(
 
     const created = [];
     const skipped = [];
+    const allowedIds = req.user!.role === 'department_lead'
+      ? await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role)
+      : null;
 
     for (const item of parsed.data.schedules) {
-      if (!checkDepartmentAccess(req, item.departmentId)) {
+      if (allowedIds && !allowedIds.has(item.departmentId)) {
         skipped.push({ ...item, reason: 'Không có quyền' });
         continue;
       }
@@ -306,7 +313,12 @@ router.patch(
     const existing = await prisma.schedule.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy' });
 
-    if (!checkDepartmentAccess(req, existing.departmentId)) {
+    if (req.user!.role === 'department_lead') {
+      const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+      if (allowedIds && !allowedIds.has(existing.departmentId)) {
+        return res.status(403).json({ error: 'Không có quyền' });
+      }
+    } else if (!checkDepartmentAccess(req, existing.departmentId)) {
       return res.status(403).json({ error: 'Không có quyền' });
     }
 
@@ -346,7 +358,12 @@ router.delete(
     const existing = await prisma.schedule.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Không tìm thấy' });
 
-    if (!checkDepartmentAccess(req, existing.departmentId)) {
+    if (req.user!.role === 'department_lead') {
+      const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+      if (allowedIds && !allowedIds.has(existing.departmentId)) {
+        return res.status(403).json({ error: 'Không có quyền' });
+      }
+    } else if (!checkDepartmentAccess(req, existing.departmentId)) {
       return res.status(403).json({ error: 'Không có quyền' });
     }
 

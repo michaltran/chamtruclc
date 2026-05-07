@@ -66,7 +66,9 @@
       "Bash(rm -f \"C:/Users/MAI_KHNV/Desktop/setup-autostart.ps1\" 2>&1 *)",
       "Bash(\"C:/Program Files \\(x86\\)/cloudflared/cloudflared.exe\" tunnel --config \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/ops/cloudflared.yml\" run)",
       "Bash(curl -s -m 5 https://api.congtruclienchieu.io.vn/health)",
-      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/department.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/department.routes.ts\")"
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/department.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/department.routes.ts\")",
+      "Bash(mkdir -p \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/lib\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/lib/dept-tree.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/lib/dept-tree.ts\")"
     ]
   }
 }
