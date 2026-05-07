@@ -35,7 +35,102 @@ router.get('/', authenticate, async (req, res) => {
     orderBy: { fullName: 'asc' },
   });
 
-  res.json(users.map(({ passwordHash, ...u }) => ({ ...u, canLogin: !!passwordHash })));
+  // Đính kèm permissions theo từng user
+  const perms = await prisma.userPermission.findMany({
+    where: { userId: { in: users.map(u => u.id) } },
+  });
+  const permsByUser: Record<string, string[]> = {};
+  perms.forEach(p => {
+    permsByUser[p.userId] = (p.pages as string[]) || [];
+  });
+
+  res.json(users.map(({ passwordHash, ...u }) => ({
+    ...u,
+    canLogin: !!passwordHash,
+    pages: permsByUser[u.id] || [],
+  })));
+});
+
+const ALL_PAGES = ['schedules','swaps','cham-truc','users','departments'] as const;
+
+/**
+ * PUT /api/users/:id/permissions (admin only)
+ * Body: { pages: string[] }
+ */
+router.put('/:id/permissions', authenticate, authorize('admin'), async (req, res) => {
+  const schema = z.object({
+    pages: z.array(z.enum(ALL_PAGES)),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  await prisma.userPermission.upsert({
+    where: { userId: req.params.id as string },
+    create: { userId: req.params.id as string, pages: parsed.data.pages },
+    update: { pages: parsed.data.pages },
+  });
+  res.json({ success: true, pages: parsed.data.pages });
+});
+
+/**
+ * POST /api/users/import (admin only)
+ * Body: { users: [{ username, fullName, employeeCode?, departmentCode?, title?, phone?, email?, role? }] }
+ * Tạo nhân viên hàng loạt — không cấp login (admin sẽ cấp sau).
+ */
+router.post('/import', authenticate, authorize('admin'), async (req, res) => {
+  const itemSchema = z.object({
+    username: z.string().min(2),
+    fullName: z.string().min(1),
+    employeeCode: z.string().optional(),
+    departmentCode: z.string().optional(),
+    title: z.string().optional(),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+    role: z.enum(['admin','department_lead','staff']).default('staff'),
+  });
+  const schema = z.object({ users: z.array(itemSchema).min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  // Map dept codes to ids in 1 query
+  const deptCodes = [...new Set(parsed.data.users.map(u => u.departmentCode).filter(Boolean) as string[])];
+  const depts = await prisma.department.findMany({ where: { code: { in: deptCodes } } });
+  const deptMap: Record<string, string> = {};
+  depts.forEach(d => { deptMap[d.code] = d.id; });
+
+  const created: any[] = [];
+  const skipped: { username: string; reason: string }[] = [];
+
+  for (const item of parsed.data.users) {
+    try {
+      const cleaned = cleanEmpty(item);
+      const data: any = {
+        username: cleaned.username,
+        fullName: cleaned.fullName,
+        employeeCode: cleaned.employeeCode,
+        title: cleaned.title,
+        phone: cleaned.phone,
+        email: cleaned.email,
+        role: cleaned.role || 'staff',
+        passwordHash: '', // chưa cấp login
+      };
+      if (item.departmentCode && deptMap[item.departmentCode]) {
+        data.departmentId = deptMap[item.departmentCode];
+      } else if (item.departmentCode) {
+        skipped.push({ username: item.username, reason: `Khoa "${item.departmentCode}" không tồn tại` });
+        continue;
+      }
+      const u = await prisma.user.create({ data });
+      created.push({ id: u.id, username: u.username, fullName: u.fullName });
+    } catch (err: any) {
+      skipped.push({
+        username: item.username,
+        reason: err.code === 'P2002' ? 'Username/email/mã NV trùng' : err.message?.slice(0, 80) || 'Lỗi',
+      });
+    }
+  }
+
+  res.json({ created: created.length, skipped: skipped.length, details: { created, skipped } });
 });
 
 /**

@@ -72,6 +72,15 @@ router.post('/login', async (req, res) => {
     },
   });
 
+  // Default pages by role for users without explicit permissions
+  const perm = await prisma.userPermission.findUnique({ where: { userId: user.id } });
+  const defaultPagesByRole: Record<string, string[]> = {
+    admin: ['schedules','swaps','cham-truc','users','departments'],
+    department_lead: ['schedules','swaps','users'],
+    staff: ['schedules','swaps'],
+  };
+  const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
+
   res.json({
     token,
     user: {
@@ -81,6 +90,7 @@ router.post('/login', async (req, res) => {
       email: user.email,
       role: user.role,
       department: user.department,
+      pages,
     },
   });
 });
@@ -94,8 +104,15 @@ router.get('/me', authenticate, async (req, res) => {
     include: { department: true },
   });
   if (!user) return res.status(404).json({ error: 'Không tìm thấy' });
+  const perm = await prisma.userPermission.findUnique({ where: { userId: user.id } });
+  const defaultPagesByRole: Record<string, string[]> = {
+    admin: ['schedules','swaps','cham-truc','users','departments'],
+    department_lead: ['schedules','swaps','users'],
+    staff: ['schedules','swaps'],
+  };
+  const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
   const { passwordHash: _, ...safeUser } = user;
-  res.json(safeUser);
+  res.json({ ...safeUser, pages });
 });
 
 /**

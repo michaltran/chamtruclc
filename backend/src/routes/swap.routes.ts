@@ -6,6 +6,9 @@ import { authenticate, authorize } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Allow large PDF uploads via base64
+const maxPdfBytes = 8 * 1024 * 1024; // 8 MB
+
 const swapInclude = {
   schedule: {
     include: {
@@ -52,9 +55,16 @@ router.post('/', authenticate, async (req, res) => {
     scheduleId: z.string().uuid(),
     targetUserId: z.string().uuid(),
     reason: z.string().optional(),
+    signedFormPdf: z.string().optional(),       // base64 (data:application/pdf;base64,...)
+    signedFormFilename: z.string().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+
+  // Reject oversized PDFs
+  if (parsed.data.signedFormPdf && parsed.data.signedFormPdf.length > maxPdfBytes) {
+    return res.status(413).json({ error: 'File PDF quá lớn (tối đa 6MB sau base64)' });
+  }
 
   const sched = await prisma.schedule.findUnique({ where: { id: parsed.data.scheduleId } });
   if (!sched) return res.status(404).json({ error: 'Không tìm thấy ca trực' });
@@ -81,10 +91,29 @@ router.post('/', authenticate, async (req, res) => {
       targetUserId: parsed.data.targetUserId,
       reason: parsed.data.reason,
       status: 'pending',
+      signedFormPdf: parsed.data.signedFormPdf,
+      signedFormFilename: parsed.data.signedFormFilename,
     },
     include: swapInclude as any,
   });
   res.status(201).json(swap);
+});
+
+/**
+ * GET /api/swaps/:id/pdf - download signed PDF
+ */
+router.get('/:id/pdf', authenticate, async (req, res) => {
+  const swap = await prisma.shiftSwap.findUnique({
+    where: { id: req.params.id as string },
+    select: { signedFormPdf: true, signedFormFilename: true },
+  });
+  if (!swap || !swap.signedFormPdf) return res.status(404).json({ error: 'Không có file' });
+  // strip data URI prefix if present
+  const base64 = swap.signedFormPdf.replace(/^data:application\/pdf;base64,/, '');
+  const buf = Buffer.from(base64, 'base64');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${swap.signedFormFilename || 'don-doi-truc.pdf'}"`);
+  res.send(buf);
 });
 
 /**

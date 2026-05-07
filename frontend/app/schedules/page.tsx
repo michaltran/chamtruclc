@@ -7,7 +7,7 @@ import { format, startOfWeek, addDays, addWeeks, getDaysInMonth } from 'date-fns
 import { vi } from 'date-fns/locale'
 
 const DUTY_ORDER = [
-  'CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
+  'LANHDAO','CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
 
 const SHIFT_CODE_COLORS: Record<string, string> = {
@@ -39,7 +39,8 @@ export default function SchedulesPage() {
   const [lockedDepts, setLockedDepts] = useState<Set<string>>(new Set())
   const [showSwapModal, setShowSwapModal] = useState(false)
   const [swapTarget, setSwapTarget] = useState<any>(null)
-  const [swapForm, setSwapForm] = useState({ targetUserId:'', reason:'' })
+  const [swapForm, setSwapForm] = useState({ targetUserId:'', reason:'', pdfBase64:'', pdfFilename:'' })
+  const [swapMode, setSwapMode] = useState<'form'|'pdf'>('form')
 
   useEffect(() => {
     const u = localStorage.getItem('auth_user')
@@ -155,14 +156,36 @@ export default function SchedulesPage() {
 
   const openSwapModal = (s: any) => {
     setSwapTarget(s)
-    setSwapForm({ targetUserId:'', reason:'' })
+    setSwapForm({ targetUserId:'', reason:'', pdfBase64:'', pdfFilename:'' })
+    setSwapMode('form')
     setShowSwapModal(true)
+  }
+
+  const handlePdfPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.type !== 'application/pdf') { alert('Chỉ chấp nhận file PDF'); return }
+    if (f.size > 5 * 1024 * 1024) { alert('File PDF tối đa 5MB'); return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setSwapForm(p => ({ ...p, pdfBase64: reader.result as string, pdfFilename: f.name }))
+    }
+    reader.readAsDataURL(f)
   }
 
   const handleSwapSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await swapApi.create({ scheduleId: swapTarget.id, ...swapForm })
+      const payload: any = {
+        scheduleId: swapTarget.id,
+        targetUserId: swapForm.targetUserId,
+        reason: swapForm.reason,
+      }
+      if (swapMode === 'pdf' && swapForm.pdfBase64) {
+        payload.signedFormPdf = swapForm.pdfBase64
+        payload.signedFormFilename = swapForm.pdfFilename
+      }
+      await swapApi.create(payload)
       setShowSwapModal(false)
       alert('Đã gửi yêu cầu đổi trực — chờ admin duyệt')
       load()
@@ -295,11 +318,13 @@ export default function SchedulesPage() {
                 </thead>
                 <tbody>
                   {departments.map((dept, ri) => {
-                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                    const isLanhDao = dept.code === 'LANHDAO'
+                    const rowBg = isLanhDao ? 'bg-amber-50' : ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                     return (
-                      <tr key={dept.id} className={`${rowBg} border-b border-gray-100 hover:bg-blue-50/30`}>
-                        <td className={`sticky left-0 z-10 ${rowBg} px-3 py-2 font-semibold text-blue-900 border-r border-gray-200 text-[11px] uppercase tracking-wide`}>
+                      <tr key={dept.id} className={`${rowBg} border-b border-gray-300 hover:bg-blue-50/30 ${isLanhDao ? 'border-b-2 border-amber-300' : ''}`}>
+                        <td className={`sticky left-0 z-10 ${rowBg} px-3 py-2 font-semibold border-r border-gray-300 text-[11px] uppercase tracking-wide ${isLanhDao ? 'text-amber-800' : 'text-blue-900'}`}>
                           <div className="flex items-center gap-1">
+                            {isLanhDao && <span className="text-amber-600">★</span>}
                             <span>{dept.name}</span>
                             {lockedDepts.has(dept.id) && (
                               <span className="text-amber-600" title="Đã nộp/duyệt — chỉ admin sửa được">🔒</span>
@@ -313,13 +338,15 @@ export default function SchedulesPage() {
                           const cell = schedMap[dateStr]?.[dept.id] || { bs: [], dd: [] }
                           const renderCell = (items: any[], type: 'BS'|'DD') => (
                             <td key={`${dateStr}-${dept.id}-${type}`}
-                              className={`align-top border-r ${type==='DD'?'border-gray-200':'border-blue-50'} px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''}  ${isWeekend?'bg-orange-50/40':''}`}>
+                              className={`align-top border border-gray-300 px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''}  ${isWeekend?'bg-orange-50/40':''}`}>
                               <div className="space-y-1 min-h-[44px]">
                                 {items.map(s=>{
                                   const code = s.shiftType?.code || 'T'
                                   const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
+                                  const isLD = dept.code === 'LANHDAO'
+                                  const tone = isLD ? 'bg-amber-50 border border-amber-300' : type==='BS' ? 'bg-blue-50 border border-blue-200' : 'bg-green-50 border border-green-200'
                                   return (
-                                    <div key={s.id} className={`group rounded px-1 py-0.5 ${type==='BS'?'bg-blue-50 border border-blue-200':'bg-green-50 border border-green-200'}`}>
+                                    <div key={s.id} className={`group rounded px-1 py-0.5 ${tone}`}>
                                       <div className="flex items-center gap-1 text-[10px]">
                                         <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
                                         <span className="flex-1 leading-tight font-medium truncate" title={s.user?.fullName}>
@@ -335,6 +362,9 @@ export default function SchedulesPage() {
                                           {canEdit && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600" title="Xoá">✕</button>}
                                         </div>
                                       </div>
+                                      {dept.code === 'LANHDAO' && s.user?.phone && (
+                                        <div className="text-[9px] text-amber-700 font-mono ml-5 mt-0.5">📞 {s.user.phone}</div>
+                                      )}
                                     </div>
                                   )
                                 })}
@@ -405,91 +435,170 @@ export default function SchedulesPage() {
       {showSwapModal && swapTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-6">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl my-auto mx-4">
-            {/* Header */}
-            <div className="text-center border-b pt-6 pb-4 px-6">
-              <p className="text-xs uppercase text-gray-600 leading-relaxed">
-                TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU<br/>
-                <b>CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><br/>
-                <span className="text-gray-500">Độc lập – Tự do – Hạnh phúc</span>
-              </p>
-              <h2 className="text-xl font-bold mt-4 uppercase">Đơn đề nghị đổi ca trực</h2>
+            {/* Tabs: form vs PDF */}
+            <div className="flex border-b">
+              <button onClick={()=>setSwapMode('form')}
+                className={`flex-1 py-3 text-sm font-medium ${swapMode==='form' ? 'text-blue-700 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                ✍️ Nhập đơn trên hệ thống
+              </button>
+              <button onClick={()=>setSwapMode('pdf')}
+                className={`flex-1 py-3 text-sm font-medium ${swapMode==='pdf' ? 'text-blue-700 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                📎 Tải đơn PDF đã ký
+              </button>
             </div>
+
+            {/* Header */}
+            <div className="grid grid-cols-2 gap-2 px-6 pt-5 pb-3 border-b text-[10px]">
+              <div className="text-center uppercase">
+                <div>SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG</div>
+                <div className="font-bold">TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</div>
+                <div className="w-20 mx-auto mt-1 border-t border-black"></div>
+              </div>
+              <div className="text-center uppercase">
+                <div className="font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div className="normal-case">Độc lập – Tự do – Hạnh phúc</div>
+                <div className="w-28 mx-auto mt-1 border-t border-black"></div>
+              </div>
+            </div>
+            <div className="text-right text-xs italic px-6 pt-2 text-gray-600">
+              Hòa Khánh, ngày {format(new Date(),'dd')} tháng {format(new Date(),'MM')} năm {format(new Date(),'yyyy')}
+            </div>
+            <h2 className="text-center text-lg font-bold uppercase mt-2 pb-3 border-b">Đơn xin đổi lịch trực bệnh viện</h2>
             <form onSubmit={handleSwapSubmit} className="px-8 py-5 space-y-4 text-sm">
-              <p className="italic text-gray-500">
-                Kính gửi: <b>Ban Giám đốc Trung tâm Y tế khu vực Liên Chiểu</b>
+              <p className="italic">
+                Kính gửi: <br/>
+                <span className="ml-3">— <b>Ban Giám đốc</b> Trung tâm Y tế khu vực Liên Chiểu</span><br/>
+                <span className="ml-3">— <b>Phòng Kế hoạch – Nghiệp vụ</b></span>
               </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-gray-500">Người đề nghị:</span><br/>
-                  <b className="text-gray-800">{user?.fullName}</b>
-                  {user?.department && <span className="text-gray-500"> — {user.department.name}</span>}
-                </div>
-                <div>
-                  <span className="text-gray-500">Ngày đề nghị:</span><br/>
-                  <b className="text-gray-800">{format(new Date(),'dd/MM/yyyy')}</b>
-                </div>
+
+              {swapMode === 'form' ? (
+                <>
+                  <div className="space-y-2">
+                    <p>Tên tôi là: <b>{user?.fullName}</b> &nbsp;&nbsp;
+                      Chức danh/Chức vụ: <b>{user?.title || '—'}</b></p>
+                    <p>Khoa/phòng: <b>{user?.department?.name || '—'}</b></p>
+                  </div>
+
+                  <div className="font-semibold text-gray-700 pt-2">Nội dung sự việc trình bày:</div>
+                  <div>
+                    <label className="block text-gray-700 mb-1">— Lý do <span className="text-red-500">*</span></label>
+                    <textarea value={swapForm.reason} onChange={e=>setSwapForm({...swapForm,reason:e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2 text-sm" rows={3}
+                      placeholder="VD: Đi công tác, hiếu hỉ gia đình..." required/>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-1">— Người nhận đổi ca <span className="text-red-500">*</span></label>
+                    <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                      <option value="">— Chọn người trực thay (cùng khoa) —</option>
+                      {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
+                        <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Bảng thông tin ca trực giống mẫu */}
+                  <p className="italic text-gray-700">
+                    Tôi làm đơn này kính mong Ban Giám đốc, phòng KHNV tạo điều kiện, chấp thuận
+                    cho tôi đổi ca trực, cụ thể như sau:
+                  </p>
+                  <table className="w-full text-xs border-collapse border border-gray-400">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-400 px-2 py-1 font-semibold">Họ và tên</th>
+                        <th className="border border-gray-400 px-2 py-1 font-semibold">Ngày trực được phân</th>
+                        <th className="border border-gray-400 px-2 py-1 font-semibold">Người nhận đổi ca</th>
+                        <th className="border border-gray-400 px-2 py-1 font-semibold">Trực chuyên môn</th>
+                        <th className="border border-gray-400 px-2 py-1 font-semibold">Trực lãnh đạo<br/>(nếu có)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border border-gray-400 px-2 py-2 text-center">{user?.fullName}</td>
+                        <td className="border border-gray-400 px-2 py-2 text-center">{format(new Date(swapTarget.shiftDate),'dd/MM/yyyy')}</td>
+                        <td className="border border-gray-400 px-2 py-2 text-center">
+                          {users.find(u=>u.id===swapForm.targetUserId)?.fullName || '...'}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-2 text-center">
+                          {swapTarget.department?.code === 'LANHDAO' ? '—' : `${swapTarget.department?.name} (${swapTarget.shiftType?.code})`}
+                        </td>
+                        <td className="border border-gray-400 px-2 py-2 text-center">
+                          {swapTarget.department?.code === 'LANHDAO' ? `Lãnh đạo (${swapTarget.shiftType?.code})` : '—'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <p>Tên tôi là: <b>{user?.fullName}</b></p>
+                    <p>Khoa/phòng: <b>{user?.department?.name || '—'}</b></p>
+                    <p>Tôi xin đổi ca trực ngày <b>{format(new Date(swapTarget.shiftDate),'dd/MM/yyyy')}</b> tại <b>{swapTarget.department?.name}</b>.</p>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-1">Người nhận đổi ca <span className="text-red-500">*</span></label>
+                    <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                      <option value="">— Chọn người trực thay —</option>
+                      {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
+                        <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-4">
+                    <label className="block text-blue-800 font-semibold mb-2">📎 File đơn PDF đã có chữ ký <span className="text-red-500">*</span></label>
+                    <input type="file" accept="application/pdf" onChange={handlePdfPick}
+                      className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"/>
+                    {swapForm.pdfFilename && (
+                      <div className="mt-2 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                        ✓ Đã chọn: <b>{swapForm.pdfFilename}</b> ({Math.round(swapForm.pdfBase64.length / 1024)} KB)
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-500 mt-2">
+                      File PDF tối đa 5MB, đã có đầy đủ chữ ký Người viết đơn / Người đổi ca / Trưởng khoa.
+                      Sau khi gửi, admin (P. KH-NV) sẽ duyệt.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-1">Ghi chú thêm</label>
+                    <input value={swapForm.reason} onChange={e=>setSwapForm({...swapForm,reason:e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="(Tùy chọn)"/>
+                  </div>
+                </>
+              )}
+
+              <div className="text-xs text-gray-700 italic">
+                Tôi cam kết sẽ thực hiện nghiêm chỉnh những gì đã nêu trong đơn và chịu hoàn toàn trách nhiệm
+                về việc xảy ra liên quan.<br/>
+                Tôi xin chân thành cảm ơn!
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                <p className="text-xs text-blue-700 font-semibold uppercase">Thông tin ca trực gốc</p>
-                <p>• Người trực: <b>{swapTarget.user?.fullName}</b></p>
-                <p>• Ngày trực: <b>{format(new Date(swapTarget.shiftDate),'EEEE, dd/MM/yyyy')}</b></p>
-                <p>• Vị trí trực: <b>{swapTarget.department?.name}</b></p>
-                <p>• Mã ca: <b>{swapTarget.shiftType?.code} — {swapTarget.shiftType?.name}</b></p>
-              </div>
-
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  1. Người trực thay <span className="text-red-500">*</span>
-                </label>
-                <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 text-sm" required>
-                  <option value="">— Chọn người trực thay (cùng khoa) —</option>
-                  {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
-                    <option key={u.id} value={u.id}>{u.fullName} {u.title?`(${u.title})`:''}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  2. Lý do đổi trực <span className="text-red-500">*</span>
-                </label>
-                <textarea value={swapForm.reason} onChange={e=>setSwapForm({...swapForm,reason:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 text-sm" rows={4}
-                  placeholder="VD: Đi công tác, hiếu hỉ gia đình, sự cố cá nhân..." required/>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
-                <b>Cam kết:</b> Tôi xin cam kết các thông tin trên là đúng sự thật. Đã trao đổi và được sự đồng ý của người trực thay.
-                Yêu cầu chỉ có hiệu lực sau khi <b>Phòng Kế hoạch - Nghiệp vụ</b> tiếp nhận và <b>Ban Giám đốc</b> phê duyệt.
-              </div>
-
-              {/* Khu vực ký xác nhận — sẽ được điền sau khi gửi/in */}
+              {/* Khu vực ký xác nhận theo mẫu .docx */}
               <div className="border rounded-lg overflow-hidden">
-                <p className="text-[10px] uppercase font-semibold text-gray-600 bg-gray-50 px-3 py-1 border-b">
-                  Phần dành cho cấp xác nhận
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 text-[11px] divide-x divide-y md:divide-y-0">
+                <div className="grid grid-cols-2 md:grid-cols-4 text-[10px] divide-x divide-y md:divide-y-0">
                   <div className="p-3 text-center">
-                    <div className="font-semibold uppercase text-gray-700">Người đề nghị</div>
-                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="font-bold uppercase text-gray-700">Người viết đơn</div>
+                    <div className="italic text-gray-400 text-[9px]">(Ký, ghi rõ họ tên)</div>
                     <div className="h-12"></div>
-                    <div className="text-gray-700">{user?.fullName}</div>
+                    <div className="text-gray-700 font-medium">{user?.fullName}</div>
                   </div>
                   <div className="p-3 text-center">
-                    <div className="font-semibold uppercase text-gray-700">Trưởng khoa /<br/>ĐD trưởng /<br/>KTV trưởng</div>
-                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="font-bold uppercase text-gray-700">Người đổi ca</div>
+                    <div className="italic text-gray-400 text-[9px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-12"></div>
+                    <div className="text-gray-700 font-medium">
+                      {users.find(u=>u.id===swapForm.targetUserId)?.fullName || '...'}
+                    </div>
+                  </div>
+                  <div className="p-3 text-center">
+                    <div className="font-bold uppercase text-gray-700">Trưởng khoa</div>
+                    <div className="italic text-gray-400 text-[9px]">(Ký, ghi rõ họ tên)</div>
                     <div className="h-12"></div>
                   </div>
                   <div className="p-3 text-center">
-                    <div className="font-semibold uppercase text-gray-700">P. Kế hoạch -<br/>Nghiệp vụ</div>
-                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
-                    <div className="h-12"></div>
-                  </div>
-                  <div className="p-3 text-center">
-                    <div className="font-semibold uppercase text-gray-700">Giám đốc</div>
-                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="font-bold uppercase text-gray-700">P.KHNV</div>
+                    <div className="italic text-gray-400 text-[9px]">(Ký, ghi rõ họ tên)</div>
                     <div className="h-12"></div>
                   </div>
                 </div>
