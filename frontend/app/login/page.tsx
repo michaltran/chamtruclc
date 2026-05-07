@@ -30,8 +30,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">Hệ thống Quản lý Lịch Trực</h1>
-          <p className="text-gray-500 mt-1">Đăng nhập để tiếp tục</p>
+          <img src="/logo.png" alt="TTYT KV Liên Chiểu" className="h-20 w-20 mx-auto mb-3 object-contain"/>
+          <h1 className="text-xl font-bold text-gray-800 leading-tight">Hệ thống Quản lý Lịch Trực</h1>
+          <p className="text-xs text-blue-700 font-semibold mt-1">TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</p>
+          <p className="text-gray-400 text-xs mt-2">Đăng nhập để tiếp tục</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

@@ -253,29 +253,44 @@ export default function SchedulesPage() {
             <div className="overflow-x-auto rounded-b-xl shadow-sm border border-t-0 border-gray-200">
               <table className="min-w-full border-collapse text-xs bg-white">
                 <thead>
-                  <tr className="bg-blue-700 text-white">
-                    <th className="sticky left-0 z-10 bg-blue-700 px-3 py-2 text-left font-semibold border-r border-blue-600 min-w-[140px]">
-                      THÀNH PHẦN TRỰC
+                  <tr className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 text-white shadow-md">
+                    <th rowSpan={2} className="sticky left-0 z-20 bg-gradient-to-br from-blue-800 to-blue-900 px-4 py-3 text-left font-bold uppercase tracking-wider border-r-2 border-blue-300/50 min-w-[160px] text-[12px]">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-1 h-6 bg-yellow-300 rounded-sm"></span>
+                        Thành phần trực
+                      </div>
                     </th>
                     {weekDays.map(d => {
-                      const dayNum = d.getDate()
                       const inMonth = d.getMonth() === month-1 && d.getFullYear() === year
-                      const isWeekend = [0,6].includes(d.getDay())
+                      const dow = d.getDay()
+                      const isSunday = dow === 0
+                      const isSaturday = dow === 6
+                      const dowLabel = isSunday ? 'CHỦ NHẬT' : isSaturday ? 'THỨ 7' : `THỨ ${dow + 1}`
                       return (
-                        <th key={dayNum} colSpan={2}
-                          className={`px-2 py-2 text-center border-r border-blue-600 min-w-[130px] ${!inMonth?'opacity-30':''} ${isWeekend?'bg-orange-600':''}`}>
-                          <div className="font-bold">{format(d,'EEE',{locale:vi}).toUpperCase()}</div>
-                          <div className="text-xs opacity-90">{format(d,'dd/MM')}</div>
+                        <th key={d.getTime()} colSpan={2}
+                          className={`px-2 py-2 text-center border-r border-blue-400/40 min-w-[130px] transition
+                            ${!inMonth ? 'opacity-40' : ''}
+                            ${isSunday ? 'bg-gradient-to-b from-rose-600 to-rose-700' : ''}
+                            ${isSaturday ? 'bg-gradient-to-b from-orange-500 to-orange-600' : ''}`}>
+                          <div className="text-[10px] font-medium opacity-80 tracking-wide">{dowLabel}</div>
+                          <div className="text-[15px] font-bold leading-none mt-0.5">{format(d,'dd/MM')}</div>
                         </th>
                       )
                     })}
                   </tr>
-                  <tr className="bg-blue-100 text-blue-800 text-[10px]">
-                    <th className="sticky left-0 z-10 bg-blue-100 border-r border-gray-200 px-3 py-1"></th>
-                    {weekDays.flatMap(d => [
-                      <th key={`${d.getDate()}-bs`} className="px-1 py-1 border-r border-blue-50 font-medium text-center w-[65px]">BS</th>,
-                      <th key={`${d.getDate()}-dd`} className="px-1 py-1 border-r border-gray-200 font-medium text-center w-[65px]">ĐD/HS/KTV</th>,
-                    ])}
+                  <tr className="bg-blue-50 text-blue-900 text-[10px] border-t border-blue-200">
+                    {weekDays.flatMap(d => {
+                      const dow = d.getDay()
+                      const tone = dow === 0 ? 'bg-rose-50/70' : dow === 6 ? 'bg-orange-50/70' : 'bg-blue-50'
+                      return [
+                        <th key={`${d.getTime()}-bs`} className={`${tone} px-1 py-1.5 border-r border-blue-100 font-bold text-center w-[65px] uppercase tracking-wide`}>
+                          <span className="text-blue-700">BS</span>
+                        </th>,
+                        <th key={`${d.getTime()}-dd`} className={`${tone} px-1 py-1.5 border-r border-blue-200 font-bold text-center w-[65px] uppercase tracking-wide`}>
+                          <span className="text-emerald-700">ĐD/HS/KTV</span>
+                        </th>,
+                      ]
+                    })}
                   </tr>
                 </thead>
                 <tbody>

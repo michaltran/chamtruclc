@@ -32,7 +32,13 @@ export default function Navbar() {
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
         <div className="flex items-center gap-6">
-          <span className="font-bold text-blue-700 text-lg">🏥 Lịch Trực</span>
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="TTYT Liên Chiểu" className="h-9 w-9 object-contain"/>
+            <div className="leading-tight">
+              <div className="font-bold text-blue-700 text-sm">Lịch Trực</div>
+              <div className="text-[10px] text-gray-500 -mt-0.5">TTYT KV Liên Chiểu</div>
+            </div>
+          </div>
           <div className="flex gap-1">
             {links.map(l => (
               <Link

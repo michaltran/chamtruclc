@@ -14,6 +14,27 @@ const createScheduleSchema = z.object({
   note: z.string().optional(),
 });
 
+/** Strip empty strings/null so optional zod/Prisma fields don't choke on '' */
+function cleanEmpty<T extends Record<string, any>>(obj: T): Partial<T> {
+  const out: any = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v === '' || v === null) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Format zod errors into a single readable Vietnamese sentence */
+function formatZodError(err: any): string {
+  if (!err?.errors) return 'Dữ liệu không hợp lệ';
+  return err.errors
+    .map((e: any) => {
+      const field = e.path?.join('.') || 'trường';
+      return `${field}: ${e.message}`;
+    })
+    .join(' | ');
+}
+
 // Khoa cấp cứu (cho ca TC/CC/LC)
 const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
 // Khoa hồi sức / hồi tỉnh (cho ca THS/CHS/LHS)
@@ -134,9 +155,9 @@ router.post(
   authenticate,
   authorize('admin', 'department_lead'),
   async (req, res) => {
-    const parsed = createScheduleSchema.safeParse(req.body);
+    const parsed = createScheduleSchema.safeParse(cleanEmpty(req.body));
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors });
+      return res.status(400).json({ error: formatZodError(parsed.error) });
     }
 
     const data = parsed.data;
@@ -171,17 +192,16 @@ router.post(
       });
       const shiftTypeId = data.shiftTypeId
         || (await getDefaultShiftTypeForDate(prisma, new Date(data.shiftDate), dept?.code)).id;
-      const schedule = await prisma.schedule.create({
-        data: {
-          userId: data.userId,
-          departmentId: data.departmentId,
-          shiftTypeId,
-          shiftDate: new Date(data.shiftDate),
-          note: data.note,
-          isWeekend: [0, 6].includes(new Date(data.shiftDate).getDay()),
-          createdById: req.user!.id,
-          status: 'draft',
-        },
+      // is_weekend is a GENERATED column in DB → use raw SQL to skip it
+      const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO schedules (user_id, department_id, shift_type_id, shift_date, note, created_by, status)
+        VALUES (${data.userId}::uuid, ${data.departmentId}::uuid, ${shiftTypeId}::uuid,
+                ${new Date(data.shiftDate)}::date, ${data.note ?? null},
+                ${req.user!.id}::uuid, 'draft'::schedule_status)
+        RETURNING id
+      `;
+      const schedule = await prisma.schedule.findUniqueOrThrow({
+        where: { id: rows[0].id },
         include: { user: true, shiftType: true },
       });
 
@@ -220,7 +240,7 @@ router.post(
       schedules: z.array(createScheduleSchema),
     });
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+    if (!parsed.success) return res.status(400).json({ error: formatZodError(parsed.error) });
 
     const created = [];
     const skipped = [];
@@ -237,18 +257,14 @@ router.post(
         });
         const shiftTypeId = item.shiftTypeId
           || (await getDefaultShiftTypeForDate(prisma, new Date(item.shiftDate), itemDept?.code)).id;
-        const s = await prisma.schedule.create({
-          data: {
-            userId: item.userId,
-            departmentId: item.departmentId,
-            shiftTypeId,
-            shiftDate: new Date(item.shiftDate),
-            isWeekend: [0, 6].includes(new Date(item.shiftDate).getDay()),
-            createdById: req.user!.id,
-            note: item.note,
-          },
-        });
-        created.push(s);
+        const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+          INSERT INTO schedules (user_id, department_id, shift_type_id, shift_date, note, created_by, status)
+          VALUES (${item.userId}::uuid, ${item.departmentId}::uuid, ${shiftTypeId}::uuid,
+                  ${new Date(item.shiftDate)}::date, ${item.note ?? null},
+                  ${req.user!.id}::uuid, 'draft'::schedule_status)
+          RETURNING id
+        `;
+        created.push({ id: rows[0].id });
       } catch (err: any) {
         skipped.push({ ...item, reason: err.code === 'P2002' ? 'Trùng ca' : 'Lỗi' });
       }
@@ -420,7 +436,7 @@ router.post(
       departmentId: z.string().uuid().optional(),
     });
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
+    if (!parsed.success) return res.status(400).json({ error: formatZodError(parsed.error) });
     const { fromYear, fromMonth, toYear, toMonth, departmentId } = parsed.data;
 
     const where: any = {
@@ -445,18 +461,13 @@ router.post(
       const tgtDay = Math.min(srcDay, targetDaysInMonth);
       const newDate = new Date(toYear, toMonth - 1, tgtDay);
       try {
-        await prisma.schedule.create({
-          data: {
-            userId: s.userId,
-            departmentId: s.departmentId,
-            shiftTypeId: s.shiftTypeId || defaultShift.id,
-            shiftDate: newDate,
-            isWeekend: [0, 6].includes(newDate.getDay()),
-            createdById: req.user!.id,
-            status: 'draft',
-            note: s.note,
-          },
-        });
+        await prisma.$executeRaw`
+          INSERT INTO schedules (user_id, department_id, shift_type_id, shift_date, note, created_by, status)
+          VALUES (${s.userId}::uuid, ${s.departmentId}::uuid,
+                  ${s.shiftTypeId || defaultShift.id}::uuid,
+                  ${newDate}::date, ${s.note ?? null},
+                  ${req.user!.id}::uuid, 'draft'::schedule_status)
+        `;
         created++;
       } catch {
         skipped++;

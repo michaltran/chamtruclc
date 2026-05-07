@@ -130,7 +130,7 @@ model Schedule {
   shiftDate     DateTime       @map("shift_date") @db.Date
   status        ScheduleStatus @default(draft)
   note          String?
-  isWeekend     Boolean        @map("is_weekend")
+  isWeekend     Boolean        @default(false) @map("is_weekend")
   createdById   String?        @map("created_by") @db.Uuid
   approvedById  String?        @map("approved_by") @db.Uuid
   approvedAt    DateTime?      @map("approved_at") @db.Timestamptz
