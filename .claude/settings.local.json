@@ -54,7 +54,9 @@
       "Read(//c/Users/MAI_KHNV/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/7ec61614-36c6-45ef-8c98-38be56b8884f/f6722cbe-1801-4016-924f-9516fbd8d31b/skills/docx/**)",
       "Bash(npm install *)",
       "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/public.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/public.routes.ts\")",
-      "Bash(mkdir -p \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/frontend/app/public/lich-truc/[year]/[month]\" 2>&1)"
+      "Bash(mkdir -p \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/frontend/app/public/lich-truc/[year]/[month]\" 2>&1)",
+      "Bash(cd \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app\" && rm backend/src/routes/public.routes.ts 2>&1 *)",
+      "Bash(curl -s \"http://localhost:4000/api/public/schedules?year=2026&month=5\")"
     ]
   }
 }

@@ -27,7 +27,12 @@ router.post('/login', async (req, res) => {
   const { username, password } = parsed.data;
   const user = await prisma.user.findUnique({
     where: { username },
-    include: { department: true },
+    include: {
+      department: true,
+      userDepartments: {
+        include: { department: { select: { id: true, name: true, code: true } } },
+      },
+    },
   });
 
   if (!user || !user.isActive) {
@@ -81,6 +86,16 @@ router.post('/login', async (req, res) => {
   };
   const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
 
+  const userDepts = user.userDepartments.map(ud => ({
+    ...ud.department,
+    isPrimary: ud.isPrimary,
+  }));
+  const departmentIds = user.userDepartments.map(ud => ud.departmentId);
+  // Fallback nếu chưa có row trong user_departments
+  const fallbackDeptIds = departmentIds.length === 0 && user.departmentId
+    ? [user.departmentId]
+    : departmentIds;
+
   res.json({
     token,
     user: {
@@ -90,6 +105,9 @@ router.post('/login', async (req, res) => {
       email: user.email,
       role: user.role,
       department: user.department,
+      departmentId: user.departmentId,
+      departments: userDepts,
+      departmentIds: fallbackDeptIds,
       pages,
     },
   });
@@ -101,7 +119,10 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    include: { department: true },
+    include: {
+      department: true,
+      userDepartments: { include: { department: { select: { id: true, name: true, code: true } } } },
+    },
   });
   if (!user) return res.status(404).json({ error: 'Không tìm thấy' });
   const perm = await prisma.userPermission.findUnique({ where: { userId: user.id } });
@@ -111,8 +132,11 @@ router.get('/me', authenticate, async (req, res) => {
     staff: ['schedules','swaps'],
   };
   const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
-  const { passwordHash: _, ...safeUser } = user;
-  res.json({ ...safeUser, pages });
+  const departments = user.userDepartments.map(ud => ({ ...ud.department, isPrimary: ud.isPrimary }));
+  const departmentIds = user.userDepartments.map(ud => ud.departmentId);
+  const finalDeptIds = departmentIds.length === 0 && user.departmentId ? [user.departmentId] : departmentIds;
+  const { passwordHash: _, userDepartments: __, ...safeUser } = user;
+  res.json({ ...safeUser, pages, departments, departmentIds: finalDeptIds });
 });
 
 /**
