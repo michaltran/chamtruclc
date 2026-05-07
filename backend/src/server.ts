@@ -11,6 +11,7 @@ import departmentRoutes from './routes/department.routes';
 import scheduleRoutes from './routes/schedule.routes';
 import reportRoutes from './routes/report.routes';
 import swapRoutes from './routes/swap.routes';
+import publicRoutes from './routes/public.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -39,6 +40,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/swaps', swapRoutes);
+app.use('/api/public', publicRoutes);
 
 // Global error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

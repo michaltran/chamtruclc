@@ -81,9 +81,26 @@ export default function SchedulesPage() {
   }, [user])
 
   // Memoize derived values — these were re-computed on every render before
-  const filteredUsersForForm = useMemo(() => (
-    form.departmentId ? users.filter(u => u.departmentId === form.departmentId) : users
-  ), [users, form.departmentId])
+  // Multi-dept aware: include user if any of their departmentIds matches.
+  const filteredUsersForForm = useMemo(() => {
+    if (!form.departmentId) return users
+    return users.filter((u: any) => {
+      if (u.departmentIds && u.departmentIds.length > 0) return u.departmentIds.includes(form.departmentId)
+      return u.departmentId === form.departmentId
+    })
+  }, [users, form.departmentId])
+
+  // Khoa được phép cho dept_lead
+  const allowedDeptIds = useMemo(() => {
+    if (user?.role !== 'department_lead') return null
+    const ids: string[] = (user as any)?.departmentIds || (user?.departmentId ? [user.departmentId] : [])
+    return new Set(ids.length > 0 ? ids : [user?.departmentId].filter(Boolean) as string[])
+  }, [user])
+
+  const visibleDepartments = useMemo(() => {
+    if (!allowedDeptIds) return departments
+    return departments.filter(d => allowedDeptIds.has(d.id))
+  }, [departments, allowedDeptIds])
 
   const { weekStart, weekDays, daysInMonth, maxWeekOffset } = useMemo(() => {
     const firstOfMonth = new Date(year, month - 1, 1)
@@ -142,6 +159,47 @@ export default function SchedulesPage() {
       load()
     } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
   }
+
+  const handleLockMonth = async () => {
+    if (!confirm(`Khoá toàn bộ lịch tháng ${month}/${year}? Sau khi khoá: lịch sẽ hiển thị trên link công khai. Có thể mở khoá lại sau.`)) return
+    try {
+      const r = await scheduleExtraApi.approveMonth(year, month)
+      alert(`Đã khoá ${r.approved} ca trực — link công khai đã sẵn sàng.`)
+      load()
+    } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  const handleUnlockMonth = async () => {
+    if (!confirm(`Mở khoá lịch tháng ${month}/${year}? Link công khai sẽ trống cho tới khi khoá lại.`)) return
+    try {
+      const r = await scheduleExtraApi.unlockMonth(year, month)
+      alert(`Đã mở khoá ${r.unlocked} ca trực`)
+      load()
+    } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  const copyPublicLink = async () => {
+    const url = `${window.location.origin}/public/lich-truc/${year}/${month}`
+    try { await navigator.clipboard.writeText(url); alert(`✓ Đã copy: ${url}`) }
+    catch { prompt('Copy link công khai:', url) }
+  }
+
+  const handleExportImage = async () => {
+    const html2canvas = (await import('html2canvas')).default
+    const node = document.getElementById('schedule-table-container')
+    if (!node) return
+    const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = `lich-truc-thang-${month}-${year}.png`
+    a.click()
+  }
+
+  // Tháng đã khoá hay chưa? (mọi schedule đều status='approved')
+  const monthIsApproved = useMemo(() => {
+    if (schedules.length === 0) return false
+    return schedules.every(s => s.status === 'approved')
+  }, [schedules])
 
   const handleDuplicate = async () => {
     const prevMonth = month === 1 ? 12 : month - 1
@@ -240,7 +298,27 @@ export default function SchedulesPage() {
                     📤 Nộp lịch tháng
                   </button>
                 )}
-                <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:'',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
+                {isAdmin && !monthIsApproved && schedules.length > 0 && (
+                  <button onClick={handleLockMonth} title="Khoá tháng & bật link công khai"
+                    className="bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-700">
+                    🔒 Khoá tháng
+                  </button>
+                )}
+                {isAdmin && monthIsApproved && (
+                  <button onClick={handleUnlockMonth} title="Mở khoá để chỉnh sửa lại"
+                    className="border border-amber-400 text-amber-700 px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-50">
+                    🔓 Mở khoá
+                  </button>
+                )}
+                <button onClick={copyPublicLink} title="Sao chép link xem công khai (chỉ hiện sau khi khoá)"
+                  className="border border-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm hover:bg-blue-50">
+                  🔗 Link công khai
+                </button>
+                <button onClick={handleExportImage} title="Xuất ảnh PNG chất lượng cao"
+                  className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50">
+                  🖼️ Xuất ảnh
+                </button>
+                <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
                   className="bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-blue-700">
                   + Thêm ca trực
                 </button>
@@ -273,7 +351,7 @@ export default function SchedulesPage() {
                 className="text-gray-600 hover:text-blue-600 text-base font-bold px-2">Tuần sau ›</button>
             </div>
 
-            <div className="overflow-x-auto rounded-b-xl shadow-sm border border-t-0 border-gray-200">
+            <div id="schedule-table-container" className="overflow-x-auto rounded-b-xl shadow-sm border border-t-0 border-gray-200">
               <table className="min-w-full border-collapse text-xs bg-white">
                 <thead>
                   <tr className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 text-white shadow-md">
@@ -641,10 +719,15 @@ export default function SchedulesPage() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Khoa/Phòng trực</label>
                 <select value={form.departmentId} onChange={e=>setForm({...form,departmentId:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required>
+                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required
+                  disabled={!!allowedDeptIds && allowedDeptIds.size === 1}>
                   <option value="">Chọn khoa/phòng</option>
-                  {departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                  {(allowedDeptIds ? departments.filter(d=>allowedDeptIds.has(d.id)) : departments)
+                    .map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                {allowedDeptIds && allowedDeptIds.size === 1 && (
+                  <p className="text-[10px] text-gray-400 mt-1 italic">Bạn chỉ được nhập lịch cho khoa đã phân quyền.</p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Ngày trực</label>

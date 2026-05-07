@@ -11,7 +11,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<any>(null)
-  const [form, setForm] = useState({ username:'', password:'', fullName:'', email:'', employeeCode:'', role:'staff', departmentId:'', title:'', phone:'' })
+  const [form, setForm] = useState<any>({ username:'', password:'', fullName:'', email:'', employeeCode:'', role:'staff', departmentIds:[] as string[], title:'', phone:'' })
 
   useEffect(() => {
     const u = localStorage.getItem('auth_user')
@@ -38,15 +38,34 @@ export default function UsersPage() {
         await userApi.create(form)
       }
       setShowForm(false); setEditUser(null)
-      setForm({ username:'', password:'', fullName:'', email:'', employeeCode:'', role:'staff', departmentId:'', title:'', phone:'' })
+      setForm({ username:'', password:'', fullName:'', email:'', employeeCode:'', role:'staff', departmentIds:[], title:'', phone:'' })
       load()
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
   }
 
   const handleEdit = (u: any) => {
     setEditUser(u)
-    setForm({ username:u.username, password:'', fullName:u.fullName, email:u.email||'', employeeCode:u.employeeCode||'', role:u.role, departmentId:u.departmentId||'', title:u.title||'', phone:u.phone||'' })
+    setForm({
+      username: u.username,
+      password: '',
+      fullName: u.fullName,
+      email: u.email || '',
+      employeeCode: u.employeeCode || '',
+      role: u.role,
+      departmentIds: u.departmentIds && u.departmentIds.length > 0
+        ? u.departmentIds
+        : (u.departmentId ? [u.departmentId] : []),
+      title: u.title || '',
+      phone: u.phone || '',
+    })
     setShowForm(true)
+  }
+
+  const toggleFormDept = (deptId: string) => {
+    setForm((p: any) => {
+      const ids: string[] = p.departmentIds || []
+      return { ...p, departmentIds: ids.includes(deptId) ? ids.filter(x=>x!==deptId) : [...ids, deptId] }
+    })
   }
 
   const handleDelete = async (id: string) => {
@@ -183,7 +202,18 @@ export default function UsersPage() {
                     <td className="px-4 py-3 font-medium text-gray-800">{u.fullName}</td>
                     <td className="px-4 py-3 text-gray-600">{u.username}</td>
                     <td className="px-4 py-3 text-gray-500">{u.employeeCode||'-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{u.department?.name||'-'}</td>
+                    <td className="px-4 py-3">
+                      {(u.departments && u.departments.length > 0) ? (
+                        <div className="flex flex-wrap gap-1">
+                          {u.departments.map((d: any) => (
+                            <span key={d.id} className={`px-1.5 py-0.5 rounded text-[10px] ${d.isPrimary ? 'bg-blue-100 text-blue-800 font-medium' : 'bg-gray-100 text-gray-600'}`}
+                              title={d.isPrimary ? 'Khoa chính' : 'Kiêm nhiệm'}>
+                              {d.name}{d.isPrimary && ' ★'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span className="text-gray-400 text-xs">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-500">{u.title||'-'}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleBadge[u.role]}`}>
@@ -267,13 +297,26 @@ export default function UsersPage() {
                     <option value="admin">Quản trị (P. KH-NV / Ban Giám đốc)</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Khoa/Phòng</label>
-                  <select value={form.departmentId} onChange={e=>setForm({...form,departmentId:e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
-                    <option value="">Chưa phân công</option>
-                    {departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Khoa/Phòng <span className="text-gray-400 font-normal text-xs">(có thể chọn nhiều khoa nếu kiêm nhiệm)</span>
+                  </label>
+                  <div className="border rounded-lg p-2 mt-1 max-h-40 overflow-y-auto bg-white">
+                    <div className="grid grid-cols-2 gap-1">
+                      {departments.map(d => (
+                        <label key={d.id} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded hover:bg-blue-50 cursor-pointer">
+                          <input type="checkbox" checked={(form.departmentIds || []).includes(d.id)}
+                            onChange={()=>toggleFormDept(d.id)}/>
+                          <span>{d.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {(form.departmentIds || []).length > 0 && (
+                    <div className="mt-1 text-xs text-blue-700">
+                      <b>{form.departmentIds.length}</b> khoa được chọn — khoa đầu tiên sẽ là khoa chính.
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Chức danh / Vị trí</label>
