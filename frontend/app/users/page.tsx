@@ -70,6 +70,76 @@ export default function UsersPage() {
     catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
   }
 
+  // ===== Phân quyền pages =====
+  const ALL_PAGES = [
+    { key:'schedules',   label:'Lịch trực' },
+    { key:'swaps',       label:'Đổi trực' },
+    { key:'cham-truc',   label:'Chấm trực' },
+    { key:'users',       label:'Quản lý nhân viên' },
+    { key:'departments', label:'Quản lý khoa/phòng' },
+  ]
+  const [permModal, setPermModal] = useState<any>(null)
+  const [permForm, setPermForm] = useState<string[]>([])
+  const openPermModal = (u: any) => {
+    setPermModal(u)
+    setPermForm(u.pages || [])
+  }
+  const togglePerm = (key: string) => {
+    setPermForm(p => p.includes(key) ? p.filter(x=>x!==key) : [...p, key])
+  }
+  const savePerm = async () => {
+    try { await userApi.setPermissions(permModal.id, permForm); setPermModal(null); load() }
+    catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  // ===== Import Excel =====
+  const [showImport, setShowImport] = useState(false)
+  const [importPreview, setImportPreview] = useState<any[]>([])
+  const [importing, setImporting] = useState(false)
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return
+    const XLSX = await import('xlsx')
+    const buf = await f.arrayBuffer()
+    const wb = XLSX.read(buf, { type:'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<any>(ws)
+    const mapped = rows.map(r => ({
+      username: String(r['Username'] || r['username'] || '').trim(),
+      fullName: String(r['Họ tên'] || r['fullName'] || '').trim(),
+      employeeCode: String(r['Mã NV'] || r['employeeCode'] || '').trim(),
+      departmentCode: String(r['Mã khoa'] || r['departmentCode'] || '').trim(),
+      title: String(r['Chức danh'] || r['title'] || '').trim(),
+      phone: String(r['SĐT'] || r['phone'] || '').trim(),
+      email: String(r['Email'] || r['email'] || '').trim(),
+      role: String(r['Vai trò'] || r['role'] || 'staff').trim() as 'admin'|'department_lead'|'staff',
+    })).filter(r => r.username && r.fullName)
+    setImportPreview(mapped)
+  }
+  const doImport = async () => {
+    if (importPreview.length === 0) return
+    setImporting(true)
+    try {
+      const r = await userApi.importBulk(importPreview)
+      alert(`Đã nhập ${r.created}/${importPreview.length} nhân viên (bỏ qua ${r.skipped})`)
+      setShowImport(false); setImportPreview([]); load()
+    } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+    finally { setImporting(false) }
+  }
+  const downloadTemplate = async () => {
+    const XLSX = await import('xlsx')
+    const data = [
+      { 'Username':'bs.nguyen.an', 'Họ tên':'Nguyễn Văn An', 'Mã NV':'NV001',
+        'Mã khoa':'NOI', 'Chức danh':'Bác sĩ', 'SĐT':'0901234567', 'Email':'an@email.com', 'Vai trò':'staff' },
+      { 'Username':'dd.tran.b', 'Họ tên':'Trần Thị B', 'Mã NV':'NV002',
+        'Mã khoa':'NOI', 'Chức danh':'Điều dưỡng trưởng', 'SĐT':'', 'Email':'', 'Vai trò':'department_lead' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(data)
+    ws['!cols'] = [{wch:18},{wch:24},{wch:10},{wch:10},{wch:22},{wch:14},{wch:24},{wch:16}]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sach NV')
+    XLSX.writeFile(wb, 'mau-import-nhan-vien.xlsx')
+  }
+
   const roleLabel: Record<string,string> = { admin:'Quản trị', department_lead:'Trưởng đơn vị', staff:'Nhân viên' }
   const roleBadge: Record<string,string> = { admin:'bg-purple-100 text-purple-800', department_lead:'bg-blue-100 text-blue-800', staff:'bg-gray-100 text-gray-700' }
 
@@ -77,12 +147,22 @@ export default function UsersPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <h1 className="text-xl font-bold text-gray-800">Quản lý Nhân viên</h1>
-          <button onClick={()=>{setEditUser(null);setShowForm(true)}}
-            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700">
-            + Thêm nhân viên
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={downloadTemplate}
+              className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-50">
+              📄 Tải file mẫu
+            </button>
+            <button onClick={()=>setShowImport(true)}
+              className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700">
+              📥 Import Excel
+            </button>
+            <button onClick={()=>{setEditUser(null);setShowForm(true)}}
+              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700">
+              + Thêm nhân viên
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -128,6 +208,9 @@ export default function UsersPage() {
                           <button onClick={()=>handleRevokeLogin(u)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Thu hồi login</button>
                         ) : (
                           <button onClick={()=>handleGrantLogin(u)} className="text-green-600 hover:text-green-800 text-xs font-medium">Cấp login</button>
+                        )}
+                        {u.canLogin && (
+                          <button onClick={()=>openPermModal(u)} className="text-purple-600 hover:text-purple-800 text-xs font-medium">Quyền trang</button>
                         )}
                         <button onClick={()=>handleDelete(u.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Xóa</button>
                       </div>
@@ -226,6 +309,91 @@ export default function UsersPage() {
                   className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Lưu</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal phân quyền pages */}
+      {permModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h2 className="text-lg font-bold mb-1">Phân quyền truy cập trang</h2>
+            <p className="text-xs text-gray-500 mb-4">{permModal.fullName} ({permModal.username})</p>
+            <div className="space-y-2">
+              {ALL_PAGES.map(p => (
+                <label key={p.key} className="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" checked={permForm.includes(p.key)} onChange={()=>togglePerm(p.key)}/>
+                  <span className="text-sm">{p.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-3 italic">
+              Người dùng chỉ thấy các trang được tích trong menu sau khi đăng nhập lại.
+            </p>
+            <div className="flex gap-2 mt-4">
+              <button onClick={()=>setPermModal(null)} className="flex-1 border py-2 rounded-lg text-sm">Hủy</button>
+              <button onClick={savePerm} className="flex-1 bg-purple-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-purple-700">Lưu quyền</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Import Excel */}
+      {showImport && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold mb-3">Import danh sách nhân viên từ Excel</h2>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800">
+              <b>Hướng dẫn:</b> File Excel cần có các cột: <b>Username, Họ tên, Mã NV, Mã khoa, Chức danh, SĐT, Email, Vai trò</b>.
+              <button onClick={downloadTemplate} className="ml-2 underline text-blue-700">Tải file mẫu</button>
+            </div>
+            <input type="file" accept=".xlsx,.xls" onChange={handleImportFile}
+              className="w-full text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 mb-3"/>
+
+            {importPreview.length > 0 && (
+              <div className="border rounded-lg overflow-auto max-h-80 mb-4">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-2 py-1 text-left">Username</th>
+                      <th className="px-2 py-1 text-left">Họ tên</th>
+                      <th className="px-2 py-1 text-left">Mã NV</th>
+                      <th className="px-2 py-1 text-left">Khoa</th>
+                      <th className="px-2 py-1 text-left">Chức danh</th>
+                      <th className="px-2 py-1 text-left">SĐT</th>
+                      <th className="px-2 py-1 text-left">Vai trò</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((r, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-2 py-1">{r.username}</td>
+                        <td className="px-2 py-1 font-medium">{r.fullName}</td>
+                        <td className="px-2 py-1 text-gray-500">{r.employeeCode}</td>
+                        <td className="px-2 py-1">{r.departmentCode}</td>
+                        <td className="px-2 py-1 text-gray-600">{r.title}</td>
+                        <td className="px-2 py-1 text-gray-500">{r.phone}</td>
+                        <td className="px-2 py-1 text-gray-600">{r.role}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {importPreview.length > 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mb-3">
+                Sẽ nhập <b>{importPreview.length}</b> nhân viên. Nhân viên import vào sẽ <b>chưa có quyền đăng nhập</b> — admin cần "Cấp login" sau.
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={()=>{setShowImport(false);setImportPreview([])}} className="flex-1 border py-2 rounded-lg text-sm">Hủy</button>
+              <button disabled={importPreview.length===0||importing} onClick={doImport}
+                className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-40">
+                {importing ? 'Đang nhập...' : `Nhập ${importPreview.length} nhân viên`}
+              </button>
+            </div>
           </div>
         </div>
       )}

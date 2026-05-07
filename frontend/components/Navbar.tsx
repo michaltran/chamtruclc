@@ -14,19 +14,22 @@ export default function Navbar() {
     router.push('/login')
   }
 
-  const links = [
-    { href: '/schedules', label: 'Lịch Trực' },
-    { href: '/swaps', label: 'Đổi Trực' },
-    ...(user?.role === 'admin'
-      ? [{ href: '/cham-truc', label: 'Chấm Trực' }]
-      : []),
-    ...(user?.role === 'admin' || user?.role === 'department_lead'
-      ? [{ href: '/users', label: 'Nhân viên' }]
-      : []),
-    ...(user?.role === 'admin'
-      ? [{ href: '/departments', label: 'Khoa/Phòng' }]
-      : []),
+  // Pages cấp cho user, fallback theo role nếu chưa có
+  const defaultPagesByRole: Record<string, string[]> = {
+    admin: ['schedules','swaps','cham-truc','users','departments'],
+    department_lead: ['schedules','swaps','users'],
+    staff: ['schedules','swaps'],
+  }
+  const allowedPages: string[] = user?.pages || defaultPagesByRole[user?.role] || ['schedules']
+
+  const allLinks = [
+    { href: '/schedules',   key: 'schedules',   label: 'Lịch Trực' },
+    { href: '/swaps',       key: 'swaps',       label: 'Đổi Trực' },
+    { href: '/cham-truc',   key: 'cham-truc',   label: 'Chấm Trực' },
+    { href: '/users',       key: 'users',       label: 'Nhân viên' },
+    { href: '/departments', key: 'departments', label: 'Khoa/Phòng' },
   ]
+  const links = allLinks.filter(l => allowedPages.includes(l.key))
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">

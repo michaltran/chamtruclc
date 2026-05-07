@@ -50,7 +50,9 @@
       "Bash(cat \"C:\\\\\\\\Users\\\\\\\\MAI_KHNV\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-MAI-KHNV-Desktop-duty-roster-app-duty-roster-app--claude-worktrees-hardcore-pascal-4a6cb4\\\\\\\\d8bcdb0f-657e-4ced-b0a7-620b1e488cc8\\\\\\\\tasks\\\\\\\\brnqmjlok.output\")",
       "Bash(ls -la \"C:\\\\\\\\Users\\\\\\\\MAI_KHNV\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-MAI-KHNV-Desktop-duty-roster-app-duty-roster-app--claude-worktrees-hardcore-pascal-4a6cb4\\\\\\\\d8bcdb0f-657e-4ced-b0a7-620b1e488cc8\\\\\\\\tasks\\\\\\\\brnqmjlok.output\")",
       "Bash(cat \"C:\\\\\\\\Users\\\\\\\\MAI_KHNV\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\C--Users-MAI-KHNV-Desktop-duty-roster-app-duty-roster-app--claude-worktrees-hardcore-pascal-4a6cb4\\\\\\\\d8bcdb0f-657e-4ced-b0a7-620b1e488cc8\\\\\\\\tasks\\\\\\\\btwdq1gkv.output\")",
-      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public' ORDER BY tablename;\")"
+      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public' ORDER BY tablename;\")",
+      "Read(//c/Users/MAI_KHNV/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/7ec61614-36c6-45ef-8c98-38be56b8884f/f6722cbe-1801-4016-924f-9516fbd8d31b/skills/docx/**)",
+      "Bash(npm install *)"
     ]
   }
 }

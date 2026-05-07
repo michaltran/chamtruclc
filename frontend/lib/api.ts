@@ -75,15 +75,25 @@ export const userApi = {
   grantLogin: (id: string, data: { password: string; role: 'admin'|'department_lead'|'staff' }) =>
     api.post(`/users/${id}/grant-login`, data).then((r) => r.data),
   revokeLogin: (id: string) => api.post(`/users/${id}/revoke-login`).then((r) => r.data),
+  setPermissions: (id: string, pages: string[]) =>
+    api.put(`/users/${id}/permissions`, { pages }).then((r) => r.data),
+  importBulk: (users: any[]) =>
+    api.post('/users/import', { users }).then((r) => r.data),
 };
 
 export const swapApi = {
   list: (status?: string) => api.get('/swaps', { params: { status } }).then(r=>r.data),
-  create: (data: { scheduleId:string; targetUserId:string; reason?:string }) =>
+  create: (data: { scheduleId:string; targetUserId:string; reason?:string; signedFormPdf?:string; signedFormFilename?:string }) =>
     api.post('/swaps', data).then(r=>r.data),
   approve: (id: string, note?: string) => api.post(`/swaps/${id}/approve`, { note }).then(r=>r.data),
   reject: (id: string, note?: string) => api.post(`/swaps/${id}/reject`, { note }).then(r=>r.data),
   cancel: (id: string) => api.delete(`/swaps/${id}`).then(r=>r.data),
+  downloadPdf: async (id: string, filename?: string) => {
+    const r = await api.get(`/swaps/${id}/pdf`, { responseType: 'blob' });
+    const url = URL.createObjectURL(r.data);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
 };
 
 export const scheduleExtraApi = {

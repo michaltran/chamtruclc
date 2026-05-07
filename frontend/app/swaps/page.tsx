@@ -126,6 +126,12 @@ export default function SwapsPage() {
                     )}
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
+                    {s.signedFormFilename && (
+                      <button onClick={()=>swapApi.downloadPdf(s.id)}
+                         className="bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1 rounded text-xs hover:bg-amber-200">
+                        📎 PDF đã ký
+                      </button>
+                    )}
                     <button onClick={()=>setPrintSwap(s)}
                       className="border border-blue-300 text-blue-700 px-3 py-1 rounded text-xs hover:bg-blue-50">
                       📄 Xem & In đơn
