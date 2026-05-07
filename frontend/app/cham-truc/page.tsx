@@ -236,9 +236,12 @@ export default function ChamTrucPage() {
             if (!groups[parent]) groups[parent] = { name: parent, deptIds: [], users: [] }
             groups[parent].deptIds.push(d.id)
           })
+          // Loại admin (quản lý) — admin không phải thành viên trực
+          const dutyUsers = allUsers.filter(u => u.role !== 'admin')
+
           // Assign each user to a parent group based on their primary dept (or any dept they have schedule in)
           const userToParent: Record<string, string> = {}
-          allUsers.forEach(u => {
+          dutyUsers.forEach(u => {
             // Lấy department code chính
             const primaryDept = (u.departments || []).find((d:any) => d.isPrimary) || (u.departments || [])[0]
             const code = primaryDept?.code || allDepts.find(d => d.id === u.departmentId)?.code
@@ -250,7 +253,7 @@ export default function ChamTrucPage() {
             const code = allDepts.find(d => d.id === s.departmentId)?.code
             if (code && PARENT_GROUP[code]) userToParent[s.userId] = PARENT_GROUP[code]
           })
-          allUsers.forEach(u => {
+          dutyUsers.forEach(u => {
             const parent = userToParent[u.id]
             if (parent && groups[parent]) groups[parent].users.push(u)
           })
