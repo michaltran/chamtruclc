@@ -163,7 +163,7 @@ model Schedule {
   approvals   Approval[]
   swaps       ShiftSwap[]
 
-  @@unique([userId, shiftDate, shiftTypeId])
+  @@unique([userId, shiftDate, shiftTypeId, departmentId])
   @@index([shiftDate])
   @@index([userId, shiftDate])
   @@index([departmentId, shiftDate])
