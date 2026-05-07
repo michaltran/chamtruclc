@@ -36,32 +36,19 @@ function formatZodError(err: any): string {
     .join(' | ');
 }
 
-// Khoa cấp cứu (cho ca TC/CC/LC)
-const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
-// Khoa hồi sức / hồi tỉnh (cho ca THS/CHS/LHS)
-const RECOVERY_DEPT_CODES = new Set(['GMHS']);
-// Khoa Lãnh đạo (TLD/CLD/LLD) — dùng shift type riêng để không conflict với ca khoa chuyên môn
-const LEADERSHIP_DEPT_CODE = 'LANHDAO';
-
 /**
- * Pick shift type smartly based on (date, departmentCode):
- *   normal/weekday=T  weekend=C  holiday=L
- *   emergency/weekday=TC weekend=CC holiday=LC
- *   recovery/weekday=THS weekend=CHS holiday=LHS
+ * Theo quy định: chỉ có 3 mã ca trực:
+ *   T = Trực ngày thường (weekday)
+ *   C = Trực cuối tuần (T7/CN)
+ *   L = Trực ngày Lễ
+ * Khoa (chuyên môn / Lãnh đạo / cấp cứu) không ảnh hưởng tới mã ca —
+ * chỉ ngày trong tuần + lịch lễ quyết định.
  */
-async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, departmentCode?: string) {
+async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, _departmentCode?: string) {
   const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: dateOnly } });
   const isWeekend = [0, 6].includes(date.getDay());
-  const isLeader = departmentCode === LEADERSHIP_DEPT_CODE;
-  const isEmerg = !!departmentCode && EMERGENCY_DEPT_CODES.has(departmentCode);
-  const isRecov = !!departmentCode && RECOVERY_DEPT_CODES.has(departmentCode);
-
-  let code: string = 'T';
-  if (isLeader) code = isHoliday ? 'LLD' : isWeekend ? 'CLD' : 'TLD';
-  else if (isRecov) code = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
-  else if (isEmerg) code = isHoliday ? 'LC' : isWeekend ? 'CC' : 'TC';
-  else code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
+  const code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
 
   let st = await prisma.shiftType.findFirst({ where: { code } });
   if (!st) {
@@ -71,7 +58,7 @@ async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, depa
     st = await prisma.shiftType.create({
       data: {
         code: 'T',
-        name: 'Trực bình thường trong tuần 24/24',
+        name: 'Trực bình thường ngày thường 24/24',
         startTime: new Date('1970-01-01T07:00:00Z'),
         endTime: new Date('1970-01-02T07:00:00Z'),
         durationHours: 24,
@@ -103,8 +90,8 @@ router.get('/shift-types', authenticate, async (_req, res) => {
     where: { isActive: true },
     orderBy: { code: 'asc' },
   });
-  // Order: T, C, L, TC, CC, LC, THS, CHS, LHS
-  const order = ['T','C','L','TC','CC','LC','THS','CHS','LHS'];
+  // Order: T, C, L (chỉ còn 3 mã)
+  const order = ['T','C','L'];
   types.sort((a, b) => {
     const ai = order.indexOf(a.code), bi = order.indexOf(b.code);
     if (ai !== -1 && bi !== -1) return ai - bi;

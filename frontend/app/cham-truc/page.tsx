@@ -179,6 +179,143 @@ export default function ChamTrucPage() {
   const sumGroup = (c: Record<CountCode, number> | undefined, codes: CountCode[]) =>
     codes.reduce((acc, k) => acc + (c?.[k] || 0), 0)
 
+  // ============================================================
+  // EXCEL EXPORT — xuất bảng chấm trực ra file .xlsx
+  // ============================================================
+  const handleExportExcel = async () => {
+    const XLSX: any = await import('xlsx')
+
+    // Build groups (replicate logic của render)
+    const allDepts = filterDept ? departments.filter(d => d.id === filterDept) : departments
+    const dutyUsers = allUsers.filter((u: any) => u.role !== 'admin')
+    const userById = new Map(dutyUsers.map((u: any) => [u.id, u]))
+
+    const groups: Record<string, { name: string; deptIds: string[]; users: any[] }> = {}
+    PARENT_ORDER.forEach(g => { groups[g] = { name: g, deptIds: [], users: [] } })
+    allDepts.forEach((d: any) => {
+      const parent = PARENT_GROUP[d.code] || d.name
+      if (!groups[parent]) groups[parent] = { name: parent, deptIds: [], users: [] }
+      groups[parent].deptIds.push(d.id)
+    })
+
+    const homeParentByUser: Record<string, string> = {}
+    dutyUsers.forEach((u: any) => {
+      const primaryDept = (u.departments || []).find((d: any) => d.isPrimary) || (u.departments || [])[0]
+      const code = primaryDept?.code || allDepts.find((d: any) => d.id === u.departmentId)?.code
+      const parent = code ? PARENT_GROUP[code] : undefined
+      if (parent && parent !== 'Lãnh đạo') homeParentByUser[u.id] = parent
+    })
+    schedules.forEach(s => {
+      if (homeParentByUser[s.userId]) return
+      const code = allDepts.find((d: any) => d.id === s.departmentId)?.code
+      if (code && code !== 'LANHDAO' && PARENT_GROUP[code]) {
+        homeParentByUser[s.userId] = PARENT_GROUP[code]
+      }
+    })
+    Object.entries(homeParentByUser).forEach(([uid, parent]) => {
+      const u = userById.get(uid)
+      if (u && groups[parent]) groups[parent].users.push(u)
+    })
+    const ldUserIds = new Set<string>()
+    schedules.forEach(s => {
+      const code = allDepts.find((d: any) => d.id === s.departmentId)?.code
+      if (code === 'LANHDAO') ldUserIds.add(s.userId)
+    })
+    ldUserIds.forEach(uid => {
+      const u = userById.get(uid)
+      if (u && groups['Lãnh đạo']) groups['Lãnh đạo'].users.push(u)
+    })
+    Object.values(groups).forEach(g => {
+      g.users.sort((a: any, b: any) => {
+        const ra = titleRank(a.title), rb = titleRank(b.title)
+        if (ra !== rb) return ra - rb
+        return (a.fullName || '').localeCompare(b.fullName || '')
+      })
+    })
+    const orderedGroups = PARENT_ORDER.map(name => groups[name]).filter(g => g && g.users.length > 0)
+
+    const buildGroupMaps = (groupDeptIds: string[]) => {
+      const groupAttend: Record<string, Record<number, string>> = {}
+      const groupCounts: Record<string, Record<string, number>> = {}
+      const userDays: Record<string, Set<number>> = {}
+      const groupSchedules = schedules.filter(s => groupDeptIds.includes(s.departmentId))
+      for (const s of groupSchedules) {
+        const day = new Date(s.shiftDate).getDate()
+        const code = s.shiftType?.code || 'T'
+        if (!userDays[s.userId]) userDays[s.userId] = new Set()
+        if (userDays[s.userId].has(day)) continue
+        userDays[s.userId].add(day)
+        groupAttend[s.userId] = groupAttend[s.userId] || {}
+        groupAttend[s.userId][day] = code
+        groupCounts[s.userId] = groupCounts[s.userId] || {}
+        groupCounts[s.userId][code] = (groupCounts[s.userId][code] || 0) + 1
+      }
+      return { groupAttend, groupCounts }
+    }
+
+    // Build sheet data
+    const aoa: any[][] = []
+    const dayCount = daysInMonth
+    const colWidth = 3 + dayCount + 4 // STT, Họ tên, Chức danh, days, T, C, L, Tổng
+
+    aoa.push(['SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG', ...Array(colWidth - 2).fill(''), 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM'])
+    aoa.push(['TTYT KHU VỰC LIÊN CHIỂU', ...Array(colWidth - 2).fill(''), 'Độc lập - Tự do - Hạnh phúc'])
+    aoa.push(['PHÒNG KẾ HOẠCH - NGHIỆP VỤ'])
+    aoa.push([])
+    aoa.push([`BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP — Tháng ${month}/${year}`])
+    aoa.push([])
+
+    const dayHeaderRow = ['STT', 'Họ và tên', 'Chức danh',
+      ...dayLabels.map(({ d, dow }) => `${d}\n${dow}`),
+      'T', 'C', 'L', 'Tổng']
+
+    orderedGroups.forEach(group => {
+      // Group title row
+      aoa.push([group.name])
+      aoa.push(dayHeaderRow)
+
+      const { groupAttend, groupCounts } = buildGroupMaps(group.deptIds)
+      group.users.forEach((u: any, idx: number) => {
+        const ua = groupAttend[u.id] || {}
+        const uc = groupCounts[u.id] || {}
+        const tCount = uc['T'] || 0
+        const cCount = uc['C'] || 0
+        const lCount = uc['L'] || 0
+        const total = tCount + cCount + lCount
+        const dayCells = dayLabels.map(({ d }) => ua[d] || '')
+        aoa.push([idx + 1, u.fullName, u.title || '', ...dayCells, tCount || '', cCount || '', lCount || '', total || ''])
+      })
+
+      // Group totals
+      const dayTotals: Record<number, number> = {}
+      Object.values(groupAttend).forEach(map => {
+        Object.keys(map).forEach(d => { dayTotals[+d] = (dayTotals[+d] || 0) + 1 })
+      })
+      let gT = 0, gC = 0, gL = 0
+      Object.values(groupCounts).forEach(c => {
+        gT += c['T'] || 0; gC += c['C'] || 0; gL += c['L'] || 0
+      })
+      aoa.push(['', 'TỔNG CỘNG', '',
+        ...dayLabels.map(({ d }) => dayTotals[d] || ''),
+        gT || '', gC || '', gL || '', (gT + gC + gL) || ''])
+      aoa.push([]) // separator
+    })
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 5 },   // STT
+      { wch: 26 },  // Họ tên
+      { wch: 18 },  // Chức danh
+      ...Array(dayCount).fill({ wch: 4 }),  // days
+      { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 7 } // T, C, L, Tổng
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, `Chấm trực ${month}-${year}`)
+    XLSX.writeFile(wb, `cham-truc-${month}-${year}.xlsx`)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
       <Navbar />
@@ -205,8 +342,12 @@ export default function ChamTrucPage() {
               <option value="">Tất cả khoa</option>
               {departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
+            <button onClick={handleExportExcel}
+              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-700">
+              📊 Xuất Excel
+            </button>
             <button onClick={()=>window.print()}
-              className="bg-gray-700 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-800">
+              className="bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-gray-800">
               🖨️ In
             </button>
           </div>
