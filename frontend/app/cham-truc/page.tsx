@@ -175,12 +175,14 @@ export default function ChamTrucPage() {
     codes.reduce((acc, k) => acc + (c?.[k] || 0), 0)
 
   // ============================================================
-  // EXCEL EXPORT — xuất bảng chấm trực ra file .xlsx
+  // EXCEL EXPORT — xuất bảng chấm trực với format đẹp (ExcelJS)
+  // Layout giống form trên web: 9 cột mã ca, 4 cột tổng, header bệnh viện
   // ============================================================
   const handleExportExcel = async () => {
-    const XLSX: any = await import('xlsx')
+    const ExcelJS = (await import('exceljs')).default
+    const { saveAs } = await import('file-saver')
 
-    // Build groups (replicate logic của render)
+    // === Build groups (replicate logic render) ===
     const allDepts = filterDept ? departments.filter(d => d.id === filterDept) : departments
     const dutyUsers = allUsers.filter((u: any) => u.role !== 'admin')
     const userById = new Map(dutyUsers.map((u: any) => [u.id, u]))
@@ -192,7 +194,6 @@ export default function ChamTrucPage() {
       if (!groups[parent]) groups[parent] = { name: parent, deptIds: [], users: [] }
       groups[parent].deptIds.push(d.id)
     })
-
     const homeParentByUser: Record<string, string> = {}
     dutyUsers.forEach((u: any) => {
       const primaryDept = (u.departments || []).find((d: any) => d.isPrimary) || (u.departments || [])[0]
@@ -248,67 +249,288 @@ export default function ChamTrucPage() {
       return { groupAttend, groupCounts }
     }
 
-    // Build sheet data
-    const aoa: any[][] = []
+    // === Excel workbook ===
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'TTYT KV Liên Chiểu'
+    wb.created = new Date()
+    const ws = wb.addWorksheet(`Chấm trực ${month}-${year}`, {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
+      views: [{ state: 'frozen', xSplit: 3, ySplit: 8, showGridLines: false }],
+    })
+
+    // 4 col total + 9 mã + days + 3 (STT, Họ tên, Chức danh)
     const dayCount = daysInMonth
-    const colWidth = 3 + dayCount + 4 // STT, Họ tên, Chức danh, days, T, C, L, Tổng
+    const totalCols = 3 + dayCount + 9 + 4 // STT, Họ tên, Chức danh, days, 9 codes, 4 totals
+    const lastColLetter = (n: number) => {
+      let s = ''
+      while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26) }
+      return s
+    }
+    const lastCol = lastColLetter(totalCols)
 
-    aoa.push(['SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG', ...Array(colWidth - 2).fill(''), 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM'])
-    aoa.push(['TTYT KHU VỰC LIÊN CHIỂU', ...Array(colWidth - 2).fill(''), 'Độc lập - Tự do - Hạnh phúc'])
-    aoa.push(['PHÒNG KẾ HOẠCH - NGHIỆP VỤ'])
-    aoa.push([])
-    aoa.push([`BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP — Tháng ${month}/${year}`])
-    aoa.push([])
+    // Column widths
+    ws.getColumn(1).width = 5  // STT
+    ws.getColumn(2).width = 28 // Họ tên
+    ws.getColumn(3).width = 16 // Chức danh
+    for (let i = 0; i < dayCount; i++) ws.getColumn(4 + i).width = 4
+    for (let i = 0; i < 9; i++) ws.getColumn(4 + dayCount + i).width = 5
+    for (let i = 0; i < 4; i++) ws.getColumn(4 + dayCount + 9 + i).width = 8
 
-    const dayHeaderRow = ['STT', 'Họ và tên', 'Chức danh',
-      ...dayLabels.map(({ d, dow }) => `${d}\n${dow}`),
-      'T', 'C', 'L', 'Tổng']
+    // === HEADER bệnh viện ===
+    ws.mergeCells(`A1:${lastColLetter(Math.floor(totalCols / 2))}1`)
+    ws.getCell('A1').value = 'SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG'
+    ws.getCell('A1').font = { bold: true, size: 11 }
+    ws.getCell('A1').alignment = { horizontal: 'center' }
+    ws.mergeCells(`${lastColLetter(Math.floor(totalCols / 2) + 1)}1:${lastCol}1`)
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}1`).value = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM'
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}1`).font = { bold: true, size: 11 }
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}1`).alignment = { horizontal: 'center' }
 
+    ws.mergeCells(`A2:${lastColLetter(Math.floor(totalCols / 2))}2`)
+    ws.getCell('A2').value = 'TTYT KHU VỰC LIÊN CHIỂU'
+    ws.getCell('A2').font = { bold: true, size: 11 }
+    ws.getCell('A2').alignment = { horizontal: 'center' }
+    ws.mergeCells(`${lastColLetter(Math.floor(totalCols / 2) + 1)}2:${lastCol}2`)
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}2`).value = 'Độc lập - Tự do - Hạnh phúc'
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}2`).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getCell(`${lastColLetter(Math.floor(totalCols / 2) + 1)}2`).font = { italic: true, size: 11 }
+
+    ws.mergeCells(`A3:${lastColLetter(Math.floor(totalCols / 2))}3`)
+    ws.getCell('A3').value = 'PHÒNG KẾ HOẠCH - NGHIỆP VỤ'
+    ws.getCell('A3').font = { bold: true, size: 11 }
+    ws.getCell('A3').alignment = { horizontal: 'center' }
+
+    // Title
+    ws.mergeCells(`A5:${lastCol}5`)
+    ws.getCell('A5').value = 'BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP'
+    ws.getCell('A5').font = { bold: true, size: 16 }
+    ws.getCell('A5').alignment = { horizontal: 'center' }
+
+    ws.mergeCells(`A6:${lastCol}6`)
+    ws.getCell('A6').value = `Tháng ${month} năm ${year}`
+    ws.getCell('A6').font = { italic: true, size: 12 }
+    ws.getCell('A6').alignment = { horizontal: 'center' }
+
+    // Color helpers
+    const fill = (color: string) => ({ type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: color } })
+    const FILL_HEADER = fill('FFE6F0FB')
+    const FILL_GROUP  = fill('FF1E40AF')
+    const FILL_LD_GROUP = fill('FFB45309')
+    const FILL_TOTAL_RED   = fill('FFFEE2E2')
+    const FILL_TOTAL_BLUE  = fill('FFDBEAFE')
+    const FILL_TOTAL_INDIGO= fill('FFE0E7FF')
+    const FILL_TOTAL_GRAY  = fill('FFF3F4F6')
+    const FILL_WEEKEND     = fill('FFFFF7ED')
+    const FILL_T = fill('FFDBEAFE'); const FILL_C = fill('FFD1FAE5'); const FILL_L = fill('FFFFEDD5')
+    const FILL_TC= fill('FFCCFBF1'); const FILL_CC= fill('FFFEE2E2'); const FILL_LC= fill('FFFEF3C7')
+    const FILL_THS=fill('FFE0E7FF'); const FILL_CHS=fill('FFEDE9FE'); const FILL_LHS=fill('FFFCE7F3')
+    const FILL_BY_CODE: Record<string, any> = { T:FILL_T, C:FILL_C, L:FILL_L, TC:FILL_TC, CC:FILL_CC, LC:FILL_LC, THS:FILL_THS, CHS:FILL_CHS, LHS:FILL_LHS }
+
+    const border = {
+      top: { style: 'thin' as const }, left: { style: 'thin' as const },
+      bottom: { style: 'thin' as const }, right: { style: 'thin' as const }
+    }
+
+    let cur = 8
     orderedGroups.forEach(group => {
-      // Group title row
-      aoa.push([group.name])
-      aoa.push(dayHeaderRow)
+      const isLd = group.name === 'Lãnh đạo'
 
+      // Group title row
+      ws.mergeCells(`A${cur}:${lastCol}${cur}`)
+      const groupCell = ws.getCell(`A${cur}`)
+      groupCell.value = (isLd ? '★ ' : '') + group.name.toUpperCase()
+      groupCell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }
+      groupCell.fill = isLd ? FILL_LD_GROUP : FILL_GROUP
+      groupCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+      ws.getRow(cur).height = 22
+      cur++
+
+      // === Header row 1 ===
+      const r1 = ws.getRow(cur)
+      r1.values = [
+        'STT', 'Họ và tên', 'Chức danh',
+        ...dayLabels.map(({ d }) => d),
+        'Ngày thường', null, null,
+        'Thứ 7, CN', null, null,
+        'Ngày Lễ, tết', null, null,
+        'TC ngày CC', 'TC ngày thường', 'TC trực HS', 'Tổng cộng',
+      ]
+      // Group merge: 9 codes are 3 groups × 3
+      const dayStartCol = 4
+      const codeStart = dayStartCol + dayCount  // first code col (TC of "thường")
+      ws.mergeCells(cur, codeStart,     cur, codeStart + 2)  // Ngày thường (TC, T, THS)
+      ws.mergeCells(cur, codeStart + 3, cur, codeStart + 5)  // T7,CN
+      ws.mergeCells(cur, codeStart + 6, cur, codeStart + 8)  // Lễ, tết
+      // Day cells: rowSpan 2
+      for (let i = 0; i < dayCount; i++) {
+        ws.mergeCells(cur, dayStartCol + i, cur + 1, dayStartCol + i)
+      }
+      // STT, Họ tên, Chức danh: rowSpan 2
+      ws.mergeCells(cur, 1, cur + 1, 1)
+      ws.mergeCells(cur, 2, cur + 1, 2)
+      ws.mergeCells(cur, 3, cur + 1, 3)
+      // 4 totals: rowSpan 2
+      const totalStart = codeStart + 9
+      for (let i = 0; i < 4; i++) ws.mergeCells(cur, totalStart + i, cur + 1, totalStart + i)
+      cur++
+
+      // === Header row 2: 9 mã ca ===
+      const r2 = ws.getRow(cur)
+      const codeRowVals: any[] = []
+      for (let i = 0; i < 3 + dayCount; i++) codeRowVals.push(null) // skip merged cells
+      codeRowVals.push('TC', 'T', 'THS', 'CC', 'C', 'CHS', 'LC', 'L', 'LHS')
+      r2.values = codeRowVals
+      cur++
+
+      // Style headers (apply to rows cur-2 and cur-1)
+      const codeColors = ['TC','T','THS','CC','C','CHS','LC','L','LHS']
+      for (let i = 0; i < 9; i++) {
+        const cell = ws.getCell(cur - 1, codeStart + i)
+        cell.fill = FILL_BY_CODE[codeColors[i]]
+        cell.font = { bold: true, size: 9 }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = border
+      }
+      // Day headers: số ngày + ngày trong tuần
+      for (let i = 0; i < dayCount; i++) {
+        const cell = ws.getCell(cur - 2, dayStartCol + i)
+        const lbl = dayLabels[i]
+        cell.value = `${lbl.d}\n${lbl.dow}`
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+        cell.font = { size: 8, bold: true }
+        cell.fill = lbl.isWeekend ? FILL_WEEKEND : FILL_HEADER
+        cell.border = border
+      }
+      // Other top-row labels
+      ;[1, 2, 3].forEach(c => {
+        const cell = ws.getCell(cur - 2, c)
+        cell.font = { bold: true, size: 10 }
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+        cell.fill = FILL_HEADER
+        cell.border = border
+      })
+      // Group sub-headers (Ngày thường / T7,CN / Lễ tết)
+      const subLabels = [['Ngày thường', FILL_T], ['Thứ 7, CN', FILL_C], ['Ngày Lễ, tết', FILL_L]]
+      for (let g = 0; g < 3; g++) {
+        const cell = ws.getCell(cur - 2, codeStart + g * 3)
+        cell.value = subLabels[g][0]
+        cell.fill = subLabels[g][1] as any
+        cell.font = { bold: true, size: 10 }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = border
+      }
+      // 4 total headers
+      ;[
+        ['TC ngày CC', FILL_TOTAL_RED],
+        ['TC ngày thường', FILL_TOTAL_BLUE],
+        ['TC trực HS', FILL_TOTAL_INDIGO],
+        ['Tổng cộng', FILL_TOTAL_GRAY],
+      ].forEach((spec, i) => {
+        const cell = ws.getCell(cur - 2, totalStart + i)
+        cell.value = spec[0] as string
+        cell.fill = spec[1] as any
+        cell.font = { bold: true, size: 9 }
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+        cell.border = border
+      })
+      ws.getRow(cur - 2).height = 32
+      ws.getRow(cur - 1).height = 14
+
+      // === Data rows ===
       const { groupAttend, groupCounts } = buildGroupMaps(group.deptIds)
       group.users.forEach((u: any, idx: number) => {
         const ua = groupAttend[u.id] || {}
         const uc = groupCounts[u.id] || {}
-        const tCount = uc['T'] || 0
-        const cCount = uc['C'] || 0
-        const lCount = uc['L'] || 0
-        const total = tCount + cCount + lCount
-        const dayCells = dayLabels.map(({ d }) => ua[d] || '')
-        aoa.push([idx + 1, u.fullName, u.title || '', ...dayCells, tCount || '', cCount || '', lCount || '', total || ''])
+        const TC = uc.TC || 0, T = uc.T || 0, THS = uc.THS || 0
+        const CC = uc.CC || 0, C = uc.C || 0, CHS = uc.CHS || 0
+        const LC = uc.LC || 0, L = uc.L || 0, LHS = uc.LHS || 0
+        const ccTotal = TC + CC + LC
+        const normTotal = T + C + L
+        const hsTotal = THS + CHS + LHS
+        const grand = ccTotal + normTotal + hsTotal
+
+        const row = ws.getRow(cur)
+        row.values = [
+          idx + 1, u.fullName, u.title || '',
+          ...dayLabels.map(({ d }) => ua[d] || ''),
+          TC || '', T || '', THS || '', CC || '', C || '', CHS || '', LC || '', L || '', LHS || '',
+          ccTotal || '', normTotal || '', hsTotal || '', grand || '',
+        ]
+        // Format
+        row.eachCell((cell, colNumber) => {
+          cell.border = border
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          if (colNumber === 2) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+            cell.font = { bold: true, size: 10 }
+          } else if (colNumber === 3) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+            cell.font = { size: 9, color: { argb: 'FF6B7280' } }
+          } else {
+            cell.font = { size: 10 }
+          }
+        })
+        // Color day cells with code
+        for (let i = 0; i < dayCount; i++) {
+          const code = ua[dayLabels[i].d]
+          const cell = ws.getCell(cur, dayStartCol + i)
+          if (code && FILL_BY_CODE[code]) {
+            cell.fill = FILL_BY_CODE[code]
+            cell.font = { bold: true, size: 9 }
+          }
+          if (dayLabels[i].isWeekend && !code) {
+            cell.fill = FILL_WEEKEND
+          }
+        }
+        // Total cells: bold colored
+        const totalFills = [FILL_TOTAL_RED, FILL_TOTAL_BLUE, FILL_TOTAL_INDIGO, FILL_TOTAL_GRAY]
+        for (let i = 0; i < 4; i++) {
+          const cell = ws.getCell(cur, totalStart + i)
+          cell.fill = totalFills[i]
+          cell.font = { bold: true, size: 11, color: { argb: ['FFB91C1C','FF1D4ED8','FF4338CA','FF111827'][i] } }
+        }
+        cur++
       })
 
-      // Group totals
+      // === Group totals row ===
       const dayTotals: Record<number, number> = {}
       Object.values(groupAttend).forEach(map => {
         Object.keys(map).forEach(d => { dayTotals[+d] = (dayTotals[+d] || 0) + 1 })
       })
-      let gT = 0, gC = 0, gL = 0
+      const codeTotals: Record<string, number> = {}
+      ;['TC','T','THS','CC','C','CHS','LC','L','LHS'].forEach(k => { codeTotals[k] = 0 })
       Object.values(groupCounts).forEach(c => {
-        gT += c['T'] || 0; gC += c['C'] || 0; gL += c['L'] || 0
+        Object.keys(codeTotals).forEach(k => { codeTotals[k] += c[k] || 0 })
       })
-      aoa.push(['', 'TỔNG CỘNG', '',
+      const totalRow = ws.getRow(cur)
+      const ccTot = codeTotals.TC + codeTotals.CC + codeTotals.LC
+      const noTot = codeTotals.T + codeTotals.C + codeTotals.L
+      const hsTot = codeTotals.THS + codeTotals.CHS + codeTotals.LHS
+      totalRow.values = [
+        '', 'TỔNG CỘNG', '',
         ...dayLabels.map(({ d }) => dayTotals[d] || ''),
-        gT || '', gC || '', gL || '', (gT + gC + gL) || ''])
-      aoa.push([]) // separator
+        codeTotals.TC || '', codeTotals.T || '', codeTotals.THS || '',
+        codeTotals.CC || '', codeTotals.C || '', codeTotals.CHS || '',
+        codeTotals.LC || '', codeTotals.L || '', codeTotals.LHS || '',
+        ccTot || '', noTot || '', hsTot || '', (ccTot + noTot + hsTot) || '',
+      ]
+      ws.mergeCells(cur, 2, cur, 3)
+      totalRow.eachCell(cell => {
+        cell.border = border
+        cell.font = { bold: true, size: 11 }
+        cell.fill = isLd ? fill('FFFEF3C7') : fill('FFE5E7EB')
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      })
+      ws.getCell(cur, 2).alignment = { horizontal: 'center', vertical: 'middle' }
+      cur++
+      cur++ // separator
     })
 
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 5 },   // STT
-      { wch: 26 },  // Họ tên
-      { wch: 18 },  // Chức danh
-      ...Array(dayCount).fill({ wch: 4 }),  // days
-      { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 7 } // T, C, L, Tổng
-    ]
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, `Chấm trực ${month}-${year}`)
-    XLSX.writeFile(wb, `cham-truc-${month}-${year}.xlsx`)
+    // Save
+    const buf = await wb.xlsx.writeBuffer()
+    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `bang-cham-truc-${month}-${year}.xlsx`)
   }
 
   return (
@@ -349,23 +571,23 @@ export default function ChamTrucPage() {
         </div>
 
         {/* Print header — đúng mẫu Excel */}
-        <div className="hidden print:block mb-2">
-          <div className="grid grid-cols-2 gap-2 text-[10pt]">
-            <div className="text-center uppercase">
+        <div className="hidden print:block mb-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="text-center uppercase print-header-name">
               <div>SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG</div>
               <div className="font-bold">TTYT KHU VỰC LIÊN CHIỂU</div>
               <div className="font-bold">PHÒNG KẾ HOẠCH - NGHIỆP VỤ</div>
               <div className="w-20 mx-auto mt-1 border-t border-black"></div>
             </div>
-            <div className="text-center uppercase">
+            <div className="text-center uppercase print-header-name">
               <div className="font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
               <div className="normal-case">Độc lập - Tự do - Hạnh phúc</div>
               <div className="w-32 mx-auto mt-1 border-t border-black"></div>
             </div>
           </div>
-          <div className="text-center mt-2">
-            <div className="text-[14pt] font-bold uppercase">BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP</div>
-            <div className="text-[11pt] italic">Tháng {month} năm {year}</div>
+          <div className="text-center mt-3">
+            <div className="print-title uppercase">BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP</div>
+            <div className="print-subtitle">Tháng {month} năm {year}</div>
           </div>
         </div>
 
@@ -758,14 +980,35 @@ export default function ChamTrucPage() {
 
       <style jsx global>{`
         @media print {
-          @page { size: A4 landscape; margin: 8mm; }
+          @page { size: A3 landscape; margin: 10mm; }
+          html, body { background: #fff !important; }
           .print\\:hidden { display: none !important; }
           .print\\:block { display: block !important; }
           nav { display: none !important; }
-          body { font-size: 8pt; }
-          table { font-size: 7pt; page-break-inside: auto; }
+          body { font-size: 9pt; color: #000; }
+          /* Bảng to và rõ */
+          table { font-size: 8.5pt !important; border-collapse: collapse; page-break-inside: auto; width: 100%; }
+          th, td { border: 1px solid #333 !important; padding: 2px 3px !important; }
+          thead { display: table-header-group; }
           tr { page-break-inside: avoid; }
-          .print\\:break-inside-avoid { page-break-inside: avoid; }
+          /* Mỗi nhóm khoa = 1 trang riêng nếu không vừa */
+          .print\\:break-inside-avoid { page-break-inside: avoid; break-inside: avoid; }
+          .print\\:break-after-page { page-break-after: always; break-after: page; }
+          /* Bo góc và shadow → tắt khi in */
+          .rounded-xl, .rounded-lg, .rounded-md, .rounded { border-radius: 0 !important; }
+          .shadow-sm, .shadow, .shadow-md { box-shadow: none !important; }
+          /* Header xanh đậm → ép màu khi in */
+          [class*="bg-blue-700"], [class*="bg-amber-500"] {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color-adjust: exact;
+          }
+          /* Chống cắt sticky */
+          .sticky { position: static !important; }
+          /* Header bệnh viện in to */
+          .print-header-name { font-size: 11pt !important; }
+          .print-title { font-size: 16pt !important; font-weight: bold !important; }
+          .print-subtitle { font-size: 12pt !important; font-style: italic !important; }
         }
       `}</style>
     </div>
