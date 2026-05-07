@@ -411,25 +411,30 @@ export default function ChamTrucPage() {
         cell.border = border
       })
       // Group sub-headers (Ngày thường / T7,CN / Lễ tết)
-      const subLabels = [['Ngày thường', FILL_T], ['Thứ 7, CN', FILL_C], ['Ngày Lễ, tết', FILL_L]]
+      const subLabels: Array<[string, any]> = [
+        ['Ngày thường', FILL_T],
+        ['Thứ 7, CN', FILL_C],
+        ['Ngày Lễ, tết', FILL_L],
+      ]
       for (let g = 0; g < 3; g++) {
         const cell = ws.getCell(cur - 2, codeStart + g * 3)
         cell.value = subLabels[g][0]
-        cell.fill = subLabels[g][1] as any
+        cell.fill = subLabels[g][1]
         cell.font = { bold: true, size: 10 }
         cell.alignment = { horizontal: 'center', vertical: 'middle' }
         cell.border = border
       }
       // 4 total headers
-      ;[
+      const totalHeaders: Array<[string, any]> = [
         ['TC ngày CC', FILL_TOTAL_RED],
         ['TC ngày thường', FILL_TOTAL_BLUE],
         ['TC trực HS', FILL_TOTAL_INDIGO],
         ['Tổng cộng', FILL_TOTAL_GRAY],
-      ].forEach((spec, i) => {
+      ]
+      totalHeaders.forEach((spec, i) => {
         const cell = ws.getCell(cur - 2, totalStart + i)
-        cell.value = spec[0] as string
-        cell.fill = spec[1] as any
+        cell.value = spec[0]
+        cell.fill = spec[1]
         cell.font = { bold: true, size: 9 }
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
         cell.border = border
