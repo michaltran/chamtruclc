@@ -325,6 +325,7 @@ export default function SchedulesPage() {
                     📤 Nộp lịch tháng
                   </button>
                 )}
+                {/* Lock/unlock/public-link/export — chỉ admin */}
                 {isAdmin && !monthIsApproved && schedules.length > 0 && (
                   <button onClick={handleLockMonth} title="Khoá tháng & bật link công khai"
                     className="bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-700 no-export">
@@ -337,14 +338,18 @@ export default function SchedulesPage() {
                     🔓 Mở khoá
                   </button>
                 )}
-                <button onClick={copyPublicLink} title="Sao chép link xem công khai (chỉ hiện sau khi khoá)"
-                  className="border border-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm hover:bg-blue-50 no-export">
-                  🔗 Link công khai
-                </button>
-                <button onClick={handleExportImage} title="Xuất ảnh PNG chất lượng cao"
-                  className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50 no-export">
-                  🖼️ Xuất ảnh
-                </button>
+                {isAdmin && (
+                  <button onClick={copyPublicLink} title="Sao chép link xem công khai (chỉ hiện sau khi khoá)"
+                    className="border border-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm hover:bg-blue-50 no-export">
+                    🔗 Link công khai
+                  </button>
+                )}
+                {isAdmin && (
+                  <button onClick={handleExportImage} title="Xuất ảnh PNG chất lượng cao"
+                    className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50 no-export">
+                    🖼️ Xuất ảnh
+                  </button>
+                )}
                 <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
                   className="bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-blue-700">
                   + Thêm ca trực
@@ -484,6 +489,42 @@ export default function SchedulesPage() {
                               </div>
                             </td>
                           )
+                          // LÃNH ĐẠO: 1 ô colSpan 2, không tách BS/ĐD
+                          if (isLanhDao) {
+                            const all = [...cell.bs, ...cell.dd]
+                            return [(
+                              <td key={`${dateStr}-${dept.id}-LD`} colSpan={2}
+                                className={`align-top border border-amber-300 px-1 py-1 ${!inMonth?'bg-gray-100 opacity-30':''} ${isWeekend?'bg-orange-50/40':''}`}>
+                                <div className="space-y-1 min-h-[44px]">
+                                  {all.map(s=>{
+                                    const code = s.shiftType?.code || 'T'
+                                    const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
+                                    return (
+                                      <div key={s.id} className="group rounded px-1 py-0.5 bg-amber-50 border border-amber-300">
+                                        <div className="flex items-center gap-1 text-[10px]">
+                                          <span className={`px-1 rounded text-[9px] font-bold border shrink-0 ${codeCls}`}>{code}</span>
+                                          <span className="flex-1 leading-tight font-medium truncate">{s.user?.fullName}</span>
+                                          <div className="hidden group-hover:flex gap-0.5 shrink-0">
+                                            {isAdmin && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600">✕</button>}
+                                          </div>
+                                        </div>
+                                        {s.user?.phone && (
+                                          <div className="text-[9px] text-amber-700 font-mono ml-5 mt-0.5">📞 {s.user.phone}</div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                  {/* Chỉ admin được nhập lãnh đạo */}
+                                  {isAdmin && inMonth && all.length === 0 && (
+                                    <button onClick={()=>openAddForm(dept.id, dateStr)}
+                                      className="w-full text-amber-300 hover:text-amber-600 text-center leading-none opacity-50 hover:opacity-100 text-base">
+                                      + Thêm
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            )]
+                          }
                           return [renderCell(cell.bs, 'BS'), renderCell(cell.dd, 'DD')]
                         })}
                       </tr>

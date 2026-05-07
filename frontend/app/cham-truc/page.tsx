@@ -202,12 +202,25 @@ export default function ChamTrucPage() {
           </div>
         </div>
 
-        {/* Print header */}
-        <div className="hidden print:block text-center mb-3 print:mb-2">
-          <div className="text-xs">TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</div>
-          <div className="text-xs">PHÒNG KẾ HOẠCH - NGHIỆP VỤ</div>
-          <div className="text-sm font-bold mt-1">BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP</div>
-          <div className="text-xs italic">Tháng {month}/{year}</div>
+        {/* Print header — đúng mẫu Excel */}
+        <div className="hidden print:block mb-2">
+          <div className="grid grid-cols-2 gap-2 text-[10pt]">
+            <div className="text-center uppercase">
+              <div>SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG</div>
+              <div className="font-bold">TTYT KHU VỰC LIÊN CHIỂU</div>
+              <div className="font-bold">PHÒNG KẾ HOẠCH - NGHIỆP VỤ</div>
+              <div className="w-20 mx-auto mt-1 border-t border-black"></div>
+            </div>
+            <div className="text-center uppercase">
+              <div className="font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+              <div className="normal-case">Độc lập - Tự do - Hạnh phúc</div>
+              <div className="w-32 mx-auto mt-1 border-t border-black"></div>
+            </div>
+          </div>
+          <div className="text-center mt-2">
+            <div className="text-[14pt] font-bold uppercase">BẢNG CHẤM CÔNG THƯỜNG TRỰC CHUYÊN MÔN Y TẾ ĐƯỢC PHỤ CẤP</div>
+            <div className="text-[11pt] italic">Tháng {month} năm {year}</div>
+          </div>
         </div>
 
         {loading ? (
@@ -339,46 +352,6 @@ export default function ChamTrucPage() {
                             </tr>
                           )
                         })}
-                        {/* Dòng TỔNG CỘNG: tổng số phiên ca theo từng cột cho cả khoa */}
-                        {(() => {
-                          const deptTotals: Record<string, number> = { TC:0,T:0,THS:0,CC:0,C:0,CHS:0,LC:0,L:0,LHS:0 }
-                          let dayTotals: Record<number, number> = {}
-                          let ccSum = 0, normSum = 0, hsSum = 0
-                          allDeptUsers.forEach(u => {
-                            const c = counts[u.id]; if (!c) return
-                            COUNT_COLS.forEach(k => { deptTotals[k] += c[k] || 0 })
-                            ccSum += sumGroup(c, ['TC','CC','LC'])
-                            normSum += sumGroup(c, ['T','C','L'])
-                            hsSum += sumGroup(c, ['THS','CHS','LHS'])
-                            const ua = attendMap[u.id] || {}
-                            for (const day in ua) {
-                              const d = +day
-                              dayTotals[d] = (dayTotals[d] || 0) + 1
-                            }
-                          })
-                          const grand = ccSum + normSum + hsSum
-                          return (
-                            <tr className="bg-yellow-50 border-t-2 border-yellow-300 font-bold">
-                              <td colSpan={2} className="sticky left-0 z-10 bg-yellow-100 px-2 py-1.5 text-yellow-900 border text-center uppercase tracking-wide">
-                                TỔNG CỘNG
-                              </td>
-                              {dayLabels.map(({d}) => (
-                                <td key={d} className="px-0.5 py-1 text-center border text-yellow-800 text-[10px]">
-                                  {dayTotals[d] || ''}
-                                </td>
-                              ))}
-                              {COUNT_COLS.map(code => (
-                                <td key={code} className="px-1 py-1 text-center border text-yellow-900 text-[10px]">
-                                  {deptTotals[code] || ''}
-                                </td>
-                              ))}
-                              <td className="px-1 py-1 text-center border bg-red-100 text-red-800">{ccSum || ''}</td>
-                              <td className="px-1 py-1 text-center border bg-blue-100 text-blue-800">{normSum || ''}</td>
-                              <td className="px-1 py-1 text-center border bg-indigo-100 text-indigo-800">{hsSum || ''}</td>
-                              <td className="px-1 py-1 text-center border bg-yellow-200 text-yellow-900">{grand || ''}</td>
-                            </tr>
-                          )
-                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -503,13 +476,14 @@ export default function ChamTrucPage() {
 
       <style jsx global>{`
         @media print {
-          @page { size: A3 landscape; margin: 8mm; }
+          @page { size: A4 landscape; margin: 8mm; }
           .print\\:hidden { display: none !important; }
           .print\\:block { display: block !important; }
           nav { display: none !important; }
-          body { font-size: 9px; }
-          table { font-size: 8px; page-break-inside: auto; }
+          body { font-size: 8pt; }
+          table { font-size: 7pt; page-break-inside: auto; }
           tr { page-break-inside: avoid; }
+          .print\\:break-inside-avoid { page-break-inside: avoid; }
         }
       `}</style>
     </div>

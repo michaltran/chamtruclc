@@ -190,6 +190,10 @@ router.post(
         where: { id: data.departmentId },
         select: { code: true },
       });
+      // LÃNH ĐẠO chỉ admin nhập được
+      if (dept?.code === 'LANHDAO' && req.user!.role !== 'admin') {
+        return res.status(403).json({ error: 'Chỉ admin được nhập lịch trực Lãnh đạo' });
+      }
       // Mỗi ngày chỉ 1 lãnh đạo trực
       if (dept?.code === 'LANHDAO') {
         const existing = await prisma.schedule.findFirst({

@@ -12,6 +12,8 @@ export default function UsersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<any>(null)
   const [form, setForm] = useState<any>({ username:'', password:'', fullName:'', email:'', employeeCode:'', role:'staff', departmentIds:[] as string[], title:'', phone:'' })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterDeptId, setFilterDeptId] = useState('')
 
   useEffect(() => {
     const u = localStorage.getItem('auth_user')
@@ -166,7 +168,7 @@ export default function UsersPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h1 className="text-xl font-bold text-gray-800">Quản lý Nhân viên</h1>
           <div className="flex gap-2 flex-wrap">
             <button onClick={downloadTemplate}
@@ -184,6 +186,24 @@ export default function UsersPage() {
           </div>
         </div>
 
+        {/* Search & Filter */}
+        <div className="bg-white rounded-xl shadow-sm p-3 mb-4 flex gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}
+              placeholder="🔍 Tìm theo tên, username hoặc mã NV..."
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          </div>
+          <select value={filterDeptId} onChange={e=>setFilterDeptId(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm">
+            <option value="">— Tất cả khoa —</option>
+            {departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          {(searchTerm || filterDeptId) && (
+            <button onClick={()=>{setSearchTerm('');setFilterDeptId('')}}
+              className="text-sm text-gray-500 hover:text-blue-600 underline">Xoá lọc</button>
+          )}
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"/></div>
         ) : (
@@ -197,7 +217,23 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {users.map(u=>(
+                {users
+                  .filter(u => {
+                    if (searchTerm) {
+                      const t = searchTerm.toLowerCase()
+                      const matchName = (u.fullName||'').toLowerCase().includes(t)
+                      const matchUser = (u.username||'').toLowerCase().includes(t)
+                      const matchCode = (u.employeeCode||'').toLowerCase().includes(t)
+                      if (!matchName && !matchUser && !matchCode) return false
+                    }
+                    if (filterDeptId) {
+                      const inDept = u.departmentId === filterDeptId
+                        || (u.departmentIds || []).includes(filterDeptId)
+                      if (!inDept) return false
+                    }
+                    return true
+                  })
+                  .map(u=>(
                   <tr key={u.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{u.fullName}</td>
                     <td className="px-4 py-3 text-gray-600">{u.username}</td>
