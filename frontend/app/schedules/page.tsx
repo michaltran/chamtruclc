@@ -10,19 +10,11 @@ const DUTY_ORDER = [
   'LANHDAO','CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
 
+// Theo quy định: chỉ có 3 mã ca T/C/L
 const SHIFT_CODE_COLORS: Record<string, string> = {
   T: 'bg-blue-100 text-blue-800 border-blue-300',
   C: 'bg-green-100 text-green-800 border-green-300',
-  TC: 'bg-teal-100 text-teal-800 border-teal-300',
-  CC: 'bg-red-100 text-red-800 border-red-300',
   L: 'bg-orange-100 text-orange-800 border-orange-300',
-  LC: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  THS: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-  CHS: 'bg-purple-100 text-purple-800 border-purple-300',
-  LHS: 'bg-pink-100 text-pink-800 border-pink-300',
-  TLD: 'bg-amber-100 text-amber-900 border-amber-400',
-  CLD: 'bg-red-100 text-red-900 border-red-400',
-  LLD: 'bg-rose-200 text-rose-900 border-rose-400',
 }
 
 // Title được tính là Bác sĩ (cột BS): bao gồm cả Trưởng khoa, Phó khoa, Giám đốc
@@ -221,55 +213,91 @@ export default function SchedulesPage() {
     catch { prompt('Copy link công khai:', url) }
   }
 
+  const [exporting, setExporting] = useState(false)
+
+  /**
+   * Xuất PDF đa trang A4 ngang, lề 1.5cm.
+   * Mỗi tuần của tháng = 1 trang. Capture từng tuần qua html2canvas
+   * (đảm bảo tiếng Việt hiển thị đúng), rồi place lên PDF.
+   */
   const handleExportImage = async () => {
-    const html2canvas = (await import('html2canvas')).default
-    const node = document.getElementById('schedule-export-area') || document.body
+    if (exporting) return
+    setExporting(true)
+    const savedOffset = weekOffset
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'), import('jspdf'),
+      ])
 
-    // Render bảng ở scale cao
-    const src = await html2canvas(node, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      windowWidth: Math.max(node.scrollWidth, 1600),
-      windowHeight: node.scrollHeight,
-      ignoreElements: (el) => el.classList?.contains('no-export'),
-    })
+      // A4 ngang: 297×210mm, lề 1.5cm
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const PAGE_W = 297, PAGE_H = 210
+      const MARGIN = 15
+      const CONTENT_W = PAGE_W - 2 * MARGIN
+      const CONTENT_H = PAGE_H - 2 * MARGIN
 
-    // A4 ngang ở 200 DPI: 297mm × 210mm
-    // 1mm = 200/25.4 ≈ 7.874 px
-    const PX_PER_MM = 200 / 25.4
-    const A4_W = Math.round(297 * PX_PER_MM)   // 2339
-    const A4_H = Math.round(210 * PX_PER_MM)   // 1654
-    const MARGIN = Math.round(15 * PX_PER_MM)  // 1.5cm = 118
-    const CONTENT_W = A4_W - MARGIN * 2
-    const CONTENT_H = A4_H - MARGIN * 2
+      // Tính số tuần thật của tháng
+      const firstOfMonth = new Date(year, month - 1, 1)
+      const baseWeek = startOfWeek(firstOfMonth, { weekStartsOn: 1 })
+      const lastDay = new Date(year, month, 0)
+      const lastWeekStart = startOfWeek(lastDay, { weekStartsOn: 1 })
+      const weeksTotal = Math.round(
+        (lastWeekStart.getTime() - baseWeek.getTime()) / (7 * 24 * 60 * 60 * 1000)
+      ) + 1
 
-    // Scale src vừa khít trong khung content (giữ tỉ lệ)
-    const scale = Math.min(CONTENT_W / src.width, CONTENT_H / src.height)
-    const drawW = src.width * scale
-    const drawH = src.height * scale
-    const offsetX = MARGIN + (CONTENT_W - drawW) / 2
-    const offsetY = MARGIN + (CONTENT_H - drawH) / 2
+      let pageAdded = 0
+      for (let w = 0; w < weeksTotal; w++) {
+        setWeekOffset(w)
+        // Đợi React re-render
+        await new Promise(r => setTimeout(r, 250))
+        const node = document.getElementById('schedule-export-area')
+        if (!node) continue
 
-    // Tạo canvas A4 trắng và vẽ bảng vào giữa
-    const out = document.createElement('canvas')
-    out.width = A4_W
-    out.height = A4_H
-    const ctx = out.getContext('2d')!
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, A4_W, A4_H)
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(src, offsetX, offsetY, drawW, drawH)
+        const canvas = await html2canvas(node, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          windowWidth: Math.max(node.scrollWidth, 1600),
+          windowHeight: node.scrollHeight,
+          ignoreElements: (el) => el.classList?.contains('no-export'),
+        })
 
-    // Viền nhẹ quanh khung lề (giúp người dùng thấy lề 1.5cm rõ ràng khi in)
-    ctx.strokeStyle = '#e5e7eb'
-    ctx.lineWidth = 1
-    ctx.strokeRect(MARGIN, MARGIN, CONTENT_W, CONTENT_H)
+        if (pageAdded > 0) pdf.addPage()
+        pageAdded++
 
-    const a = document.createElement('a')
-    a.href = out.toDataURL('image/png', 1.0)
-    a.download = `lich-truc-thang-${month}-${year}-A4.png`
-    a.click()
+        // Fit vào khung content giữ tỉ lệ
+        const ratio = canvas.width / canvas.height
+        let drawW = CONTENT_W
+        let drawH = drawW / ratio
+        if (drawH > CONTENT_H) {
+          drawH = CONTENT_H
+          drawW = drawH * ratio
+        }
+        const offsetX = MARGIN + (CONTENT_W - drawW) / 2
+        const offsetY = MARGIN + (CONTENT_H - drawH) / 2
+
+        pdf.addImage(
+          canvas.toDataURL('image/jpeg', 0.92),
+          'JPEG',
+          offsetX, offsetY, drawW, drawH,
+          undefined,
+          'FAST',
+        )
+
+        // Footer page number
+        pdf.setFontSize(8).setTextColor(120)
+        pdf.text(
+          `Tuần ${w + 1}/${weeksTotal} — Tháng ${month}/${year}`,
+          PAGE_W / 2, PAGE_H - 6, { align: 'center' },
+        )
+      }
+
+      pdf.save(`lich-truc-thang-${month}-${year}.pdf`)
+    } catch (err: any) {
+      alert('Lỗi xuất PDF: ' + (err?.message || err))
+    } finally {
+      setWeekOffset(savedOffset)
+      setExporting(false)
+    }
   }
 
   // Tháng đã khoá hay chưa? (mọi schedule đều status='approved')
@@ -395,9 +423,10 @@ export default function SchedulesPage() {
                   </button>
                 )}
                 {isAdmin && (
-                  <button onClick={handleExportImage} title="Xuất ảnh PNG chất lượng cao"
-                    className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50 no-export">
-                    🖼️ Xuất ảnh
+                  <button onClick={handleExportImage} disabled={exporting}
+                    title="Xuất PDF A4 đa trang (mỗi tuần 1 trang, lề 1.5cm)"
+                    className="border border-gray-400 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-50 no-export disabled:opacity-50">
+                    {exporting ? '⏳ Đang xuất...' : '📄 Xuất PDF'}
                   </button>
                 )}
                 <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
