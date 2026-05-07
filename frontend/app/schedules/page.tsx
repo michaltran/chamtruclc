@@ -48,6 +48,22 @@ export default function SchedulesPage() {
     setUser(JSON.parse(u))
   }, [router])
 
+  // Auto-jump tới tuần hôm nay khi mở trang lần đầu (nếu đang ở tháng hiện tại)
+  const [didAutoJump, setDidAutoJump] = useState(false)
+  useEffect(() => {
+    if (didAutoJump) return
+    const today = new Date()
+    if (today.getFullYear() === year && today.getMonth() + 1 === month) {
+      const firstOfMonth = new Date(year, month - 1, 1)
+      const baseWeek = startOfWeek(firstOfMonth, { weekStartsOn: 1 })
+      const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+      const diffMs = todayWeekStart.getTime() - baseWeek.getTime()
+      const offset = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+      setWeekOffset(Math.max(0, offset))
+    }
+    setDidAutoJump(true)
+  }, [year, month, didAutoJump])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -90,11 +106,15 @@ export default function SchedulesPage() {
     })
   }, [users, form.departmentId])
 
-  // Khoa được phép cho dept_lead
+  // Khoa được phép cho dept_lead — null nếu admin/staff hoặc dept_lead chưa được gán khoa.
+  // Nếu user.role là department_lead nhưng không có khoa nào → null (cho thấy tất cả khoa, backend cũng có check)
   const allowedDeptIds = useMemo(() => {
     if (user?.role !== 'department_lead') return null
-    const ids: string[] = (user as any)?.departmentIds || (user?.departmentId ? [user.departmentId] : [])
-    return new Set(ids.length > 0 ? ids : [user?.departmentId].filter(Boolean) as string[])
+    const ids: string[] = ((user as any)?.departmentIds && (user as any).departmentIds.length > 0)
+      ? (user as any).departmentIds
+      : (user?.departmentId ? [user.departmentId] : [])
+    if (ids.length === 0) return null
+    return new Set<string>(ids)
   }, [user])
 
   const visibleDepartments = useMemo(() => {
@@ -186,9 +206,16 @@ export default function SchedulesPage() {
 
   const handleExportImage = async () => {
     const html2canvas = (await import('html2canvas')).default
-    const node = document.getElementById('schedule-table-container')
-    if (!node) return
-    const canvas = await html2canvas(node, { scale: 2, backgroundColor: '#ffffff' })
+    // Xuất toàn trang (loại trừ thanh navbar và các button toolbar)
+    const node = document.getElementById('schedule-export-area') || document.body
+    const canvas = await html2canvas(node, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      windowWidth: Math.max(node.scrollWidth, 1600),
+      windowHeight: node.scrollHeight,
+      // Bỏ phần tử có class .no-export để không xuất các button không cần
+      ignoreElements: (el) => el.classList?.contains('no-export'),
+    })
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
     a.download = `lich-truc-thang-${month}-${year}.png`
@@ -300,22 +327,22 @@ export default function SchedulesPage() {
                 )}
                 {isAdmin && !monthIsApproved && schedules.length > 0 && (
                   <button onClick={handleLockMonth} title="Khoá tháng & bật link công khai"
-                    className="bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-700">
+                    className="bg-amber-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-700 no-export">
                     🔒 Khoá tháng
                   </button>
                 )}
                 {isAdmin && monthIsApproved && (
                   <button onClick={handleUnlockMonth} title="Mở khoá để chỉnh sửa lại"
-                    className="border border-amber-400 text-amber-700 px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-50">
+                    className="border border-amber-400 text-amber-700 px-3 py-1 rounded-lg text-sm font-medium hover:bg-amber-50 no-export">
                     🔓 Mở khoá
                   </button>
                 )}
                 <button onClick={copyPublicLink} title="Sao chép link xem công khai (chỉ hiện sau khi khoá)"
-                  className="border border-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm hover:bg-blue-50">
+                  className="border border-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm hover:bg-blue-50 no-export">
                   🔗 Link công khai
                 </button>
                 <button onClick={handleExportImage} title="Xuất ảnh PNG chất lượng cao"
-                  className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50">
+                  className="border border-gray-400 text-gray-700 px-3 py-1 rounded-lg text-sm hover:bg-gray-50 no-export">
                   🖼️ Xuất ảnh
                 </button>
                 <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
@@ -331,10 +358,12 @@ export default function SchedulesPage() {
           <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"/></div>
         ) : viewMode === 'week' ? (
           /* WEEKLY VIEW */
-          <div>
+          <div id="schedule-export-area">
             {/* Excel-style title */}
             <div className="text-center bg-white rounded-t-xl border border-b-0 border-gray-200 py-3 px-4">
-              <h2 className="text-base font-bold text-blue-900 uppercase tracking-wide">
+              <img src="/logo.png" alt="" className="h-10 w-10 mx-auto mb-1 object-contain"/>
+              <p className="text-[10px] uppercase text-gray-600">SỞ Y TẾ THÀNH PHỐ ĐÀ NẴNG — TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</p>
+              <h2 className="text-base font-bold text-blue-900 uppercase tracking-wide mt-1">
                 LỊCH TRỰC TOÀN VIỆN THÁNG {month}/{year}
               </h2>
               <p className="text-xs text-gray-600 mt-1">
@@ -343,7 +372,7 @@ export default function SchedulesPage() {
               </p>
             </div>
             {/* Week navigation */}
-            <div className="flex items-center justify-between bg-gray-50 px-4 py-1.5 border-x border-gray-200">
+            <div className="flex items-center justify-between bg-gray-50 px-4 py-1.5 border-x border-gray-200 no-export">
               <button onClick={()=>setWeekOffset(w=>Math.max(0,w-1))} disabled={weekOffset===0}
                 className="text-gray-600 hover:text-blue-600 disabled:opacity-30 text-base font-bold px-2">‹ Tuần trước</button>
               <button onClick={()=>window.print()} className="text-xs text-gray-500 hover:text-blue-600">🖨️ In tuần này</button>

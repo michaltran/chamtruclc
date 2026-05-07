@@ -278,6 +278,46 @@ export default function ChamTrucPage() {
                             </tr>
                           )
                         })}
+                        {/* Dòng TỔNG CỘNG: tổng số phiên ca theo từng cột cho cả khoa */}
+                        {(() => {
+                          const deptTotals: Record<string, number> = { TC:0,T:0,THS:0,CC:0,C:0,CHS:0,LC:0,L:0,LHS:0 }
+                          let dayTotals: Record<number, number> = {}
+                          let ccSum = 0, normSum = 0, hsSum = 0
+                          allDeptUsers.forEach(u => {
+                            const c = counts[u.id]; if (!c) return
+                            COUNT_COLS.forEach(k => { deptTotals[k] += c[k] || 0 })
+                            ccSum += sumGroup(c, ['TC','CC','LC'])
+                            normSum += sumGroup(c, ['T','C','L'])
+                            hsSum += sumGroup(c, ['THS','CHS','LHS'])
+                            const ua = attendMap[u.id] || {}
+                            for (const day in ua) {
+                              const d = +day
+                              dayTotals[d] = (dayTotals[d] || 0) + 1
+                            }
+                          })
+                          const grand = ccSum + normSum + hsSum
+                          return (
+                            <tr className="bg-yellow-50 border-t-2 border-yellow-300 font-bold">
+                              <td colSpan={2} className="sticky left-0 z-10 bg-yellow-100 px-2 py-1.5 text-yellow-900 border text-center uppercase tracking-wide">
+                                TỔNG CỘNG
+                              </td>
+                              {dayLabels.map(({d}) => (
+                                <td key={d} className="px-0.5 py-1 text-center border text-yellow-800 text-[10px]">
+                                  {dayTotals[d] || ''}
+                                </td>
+                              ))}
+                              {COUNT_COLS.map(code => (
+                                <td key={code} className="px-1 py-1 text-center border text-yellow-900 text-[10px]">
+                                  {deptTotals[code] || ''}
+                                </td>
+                              ))}
+                              <td className="px-1 py-1 text-center border bg-red-100 text-red-800">{ccSum || ''}</td>
+                              <td className="px-1 py-1 text-center border bg-blue-100 text-blue-800">{normSum || ''}</td>
+                              <td className="px-1 py-1 text-center border bg-indigo-100 text-indigo-800">{hsSum || ''}</td>
+                              <td className="px-1 py-1 text-center border bg-yellow-200 text-yellow-900">{grand || ''}</td>
+                            </tr>
+                          )
+                        })()}
                       </tbody>
                     </table>
                   </div>
