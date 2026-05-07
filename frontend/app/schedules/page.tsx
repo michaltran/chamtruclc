@@ -98,9 +98,11 @@ export default function SchedulesPage() {
 
   // Memoize derived values — these were re-computed on every render before
   // Multi-dept aware: include user if any of their departmentIds matches.
+  // Loại admin (quản lý) — admin không trực nên không hiện trong dropdown chọn người trực.
   const filteredUsersForForm = useMemo(() => {
-    if (!form.departmentId) return users
-    return users.filter((u: any) => {
+    const eligible = users.filter((u: any) => u.role !== 'admin')
+    if (!form.departmentId) return eligible
+    return eligible.filter((u: any) => {
       if (u.departmentIds && u.departmentIds.length > 0) return u.departmentIds.includes(form.departmentId)
       return u.departmentId === form.departmentId
     })
@@ -643,7 +645,7 @@ export default function SchedulesPage() {
                     <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
                       className="w-full border rounded-lg px-3 py-2 text-sm" required>
                       <option value="">— Chọn người trực thay (cùng khoa) —</option>
-                      {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
+                      {users.filter(u=>u.role!=='admin'&&u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
                         <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
                       ))}
                     </select>
@@ -693,7 +695,7 @@ export default function SchedulesPage() {
                     <select value={swapForm.targetUserId} onChange={e=>setSwapForm({...swapForm,targetUserId:e.target.value})}
                       className="w-full border rounded-lg px-3 py-2 text-sm" required>
                       <option value="">— Chọn người trực thay —</option>
-                      {users.filter(u=>u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
+                      {users.filter(u=>u.role!=='admin'&&u.id!==swapTarget.userId&&u.departmentId===swapTarget.departmentId).map(u=>(
                         <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
                       ))}
                     </select>

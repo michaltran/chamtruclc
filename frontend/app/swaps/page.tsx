@@ -270,7 +270,7 @@ export default function SwapsPage() {
                   className="w-full border rounded-lg px-3 py-2 text-sm" required disabled={!selectedSchedule}>
                   <option value="">— Chọn người trực thay —</option>
                   {selectedSchedule && allUsers
-                    .filter((u:any) => u.id !== selectedSchedule.userId &&
+                    .filter((u:any) => u.role !== 'admin' && u.id !== selectedSchedule.userId &&
                       ((u.departmentIds || []).includes(selectedSchedule.departmentId) || u.departmentId === selectedSchedule.departmentId))
                     .map((u:any) => (
                       <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
