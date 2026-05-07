@@ -18,6 +18,7 @@ export default function SwapsPage() {
   const [swaps, setSwaps] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('')
+  const [printSwap, setPrintSwap] = useState<any>(null)
 
   useEffect(() => {
     const u = localStorage.getItem('auth_user')
@@ -125,6 +126,10 @@ export default function SwapsPage() {
                     )}
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
+                    <button onClick={()=>setPrintSwap(s)}
+                      className="border border-blue-300 text-blue-700 px-3 py-1 rounded text-xs hover:bg-blue-50">
+                      📄 Xem & In đơn
+                    </button>
                     {isAdmin && s.status === 'pending' && (
                       <>
                         <button onClick={()=>handleApprove(s.id)}
@@ -144,6 +149,104 @@ export default function SwapsPage() {
           </div>
         )}
       </div>
+
+      {/* Print form modal — đơn đề nghị đổi ca trực có chỗ ký */}
+      {printSwap && (
+        <div className="fixed inset-0 bg-black/40 z-50 overflow-y-auto py-6 print:bg-white print:py-0">
+          <div className="bg-white max-w-3xl mx-auto rounded-2xl shadow-xl print:shadow-none print:rounded-none print:max-w-none">
+            {/* Modal toolbar — hidden on print */}
+            <div className="flex items-center justify-end gap-2 px-4 py-2 border-b print:hidden">
+              <button onClick={()=>window.print()} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">🖨️ In đơn</button>
+              <button onClick={()=>setPrintSwap(null)} className="border px-3 py-1 rounded text-sm hover:bg-gray-50">Đóng</button>
+            </div>
+
+            <div className="px-10 py-6 print:px-12 print:py-8 text-sm">
+              {/* Header */}
+              <div className="grid grid-cols-2 mb-6">
+                <div className="text-center text-xs uppercase">
+                  <div>TRUNG TÂM Y TẾ KHU VỰC LIÊN CHIỂU</div>
+                  <div>PHÒNG KẾ HOẠCH - NGHIỆP VỤ</div>
+                  <div className="w-24 mx-auto mt-1 border-t border-black"></div>
+                </div>
+                <div className="text-center text-xs uppercase">
+                  <div className="font-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                  <div>Độc lập - Tự do - Hạnh phúc</div>
+                  <div className="w-32 mx-auto mt-1 border-t border-black"></div>
+                </div>
+              </div>
+
+              <div className="text-right text-xs italic mb-3">
+                Đà Nẵng, ngày {format(new Date(printSwap.createdAt),'dd')} tháng {format(new Date(printSwap.createdAt),'MM')} năm {format(new Date(printSwap.createdAt),'yyyy')}
+              </div>
+
+              <h1 className="text-center text-lg font-bold uppercase mb-1">Đơn đề nghị đổi ca trực</h1>
+              <div className="text-center text-xs italic mb-5">
+                Kính gửi: <b>Ban Giám đốc Trung tâm Y tế khu vực Liên Chiểu</b><br/>
+                <span className="text-gray-600">Đồng kính gửi: Phòng Kế hoạch - Nghiệp vụ</span>
+              </div>
+
+              {/* Body */}
+              <div className="space-y-2 leading-relaxed">
+                <p>Tôi tên là: <b>{printSwap.requester.fullName}</b></p>
+                <p>Đơn vị công tác: <b>{printSwap.schedule.department?.name || '—'}</b></p>
+                <p>Theo lịch trực phân công, tôi có ca trực vào ngày <b>{format(new Date(printSwap.schedule.shiftDate),'dd/MM/yyyy')}</b> tại
+                vị trí <b>{printSwap.schedule.department?.name}</b>, mã ca <b>{printSwap.schedule.shiftType?.code} — {printSwap.schedule.shiftType?.name}</b>.</p>
+                <p>Vì <b>{printSwap.reason || '(lý do cá nhân)'}</b>, tôi không thể thực hiện ca trực này.</p>
+                <p>Tôi xin đề nghị Ban Giám đốc xem xét, cho phép tôi được đổi ca trực với:</p>
+                <p className="ml-6">
+                  Ông/Bà: <b>{printSwap.targetUser.fullName}</b>
+                </p>
+                <p>Tôi xin cam kết các thông tin trên là đúng sự thật và đã trao đổi, được sự đồng ý của người trực thay.</p>
+                <p>Kính mong Ban Giám đốc xem xét và phê duyệt.</p>
+                <p className="italic">Tôi xin chân thành cảm ơn!</p>
+              </div>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-4 gap-4 text-xs text-center mt-10">
+                <div>
+                  <div className="font-bold uppercase">Người đề nghị</div>
+                  <div className="italic text-[10px]">(Ký, ghi rõ họ tên)</div>
+                  <div className="h-16"></div>
+                  <div className="font-medium">{printSwap.requester.fullName}</div>
+                </div>
+                <div>
+                  <div className="font-bold uppercase">Trưởng khoa /<br/>ĐD trưởng /<br/>KTV trưởng</div>
+                  <div className="italic text-[10px]">(Ký, ghi rõ họ tên)</div>
+                  <div className="h-16"></div>
+                </div>
+                <div>
+                  <div className="font-bold uppercase">P. Kế hoạch -<br/>Nghiệp vụ</div>
+                  <div className="italic text-[10px]">(Ký, ghi rõ họ tên)</div>
+                  <div className="h-16"></div>
+                  {printSwap.reviewedBy && printSwap.status === 'approved' && (
+                    <div className="font-medium">{printSwap.reviewedBy.fullName}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold uppercase">Giám đốc</div>
+                  <div className="italic text-[10px]">(Ký, ghi rõ họ tên<br/>và đóng dấu)</div>
+                  <div className="h-16"></div>
+                </div>
+              </div>
+
+              {/* Status footer */}
+              <div className="mt-6 text-[10px] text-gray-500 print:hidden">
+                Trạng thái: <span className={`px-2 py-0.5 rounded ${STATUS_BADGE[printSwap.status]}`}>{STATUS_LABEL[printSwap.status]}</span>
+                {printSwap.reviewNote && <> — Ghi chú: <i>{printSwap.reviewNote}</i></>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 portrait; margin: 15mm; }
+          .print\\:hidden { display: none !important; }
+          nav { display: none !important; }
+          body { font-size: 11pt; line-height: 1.5; }
+        }
+      `}</style>
     </div>
   )
 }
