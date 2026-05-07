@@ -174,10 +174,17 @@ router.delete('/:id', authenticate, async (req, res) => {
   const id = req.params.id as string;
   const swap = await prisma.shiftSwap.findUnique({ where: { id } });
   if (!swap) return res.status(404).json({ error: 'Không tìm thấy' });
-  if (swap.status !== 'pending') return res.status(400).json({ error: 'Chỉ huỷ được yêu cầu đang chờ' });
-  if (swap.requesterId !== req.user!.id && req.user!.role !== 'admin') {
-    return res.status(403).json({ error: 'Không có quyền' });
+
+  const isAdmin = req.user!.role === 'admin';
+  const isOwner = swap.requesterId === req.user!.id;
+
+  // Admin: xoá được mọi trạng thái (kể cả approved/rejected)
+  // Non-admin: chỉ huỷ được đơn của mình ở trạng thái pending
+  if (!isAdmin) {
+    if (!isOwner) return res.status(403).json({ error: 'Không có quyền' });
+    if (swap.status !== 'pending') return res.status(400).json({ error: 'Chỉ huỷ được yêu cầu đang chờ' });
   }
+
   await prisma.shiftSwap.delete({ where: { id } });
   res.json({ success: true });
 });

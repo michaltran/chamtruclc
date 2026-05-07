@@ -223,19 +223,52 @@ export default function SchedulesPage() {
 
   const handleExportImage = async () => {
     const html2canvas = (await import('html2canvas')).default
-    // Xuất toàn trang (loại trừ thanh navbar và các button toolbar)
     const node = document.getElementById('schedule-export-area') || document.body
-    const canvas = await html2canvas(node, {
+
+    // Render bảng ở scale cao
+    const src = await html2canvas(node, {
       scale: 2,
       backgroundColor: '#ffffff',
       windowWidth: Math.max(node.scrollWidth, 1600),
       windowHeight: node.scrollHeight,
-      // Bỏ phần tử có class .no-export để không xuất các button không cần
       ignoreElements: (el) => el.classList?.contains('no-export'),
     })
+
+    // A4 ngang ở 200 DPI: 297mm × 210mm
+    // 1mm = 200/25.4 ≈ 7.874 px
+    const PX_PER_MM = 200 / 25.4
+    const A4_W = Math.round(297 * PX_PER_MM)   // 2339
+    const A4_H = Math.round(210 * PX_PER_MM)   // 1654
+    const MARGIN = Math.round(15 * PX_PER_MM)  // 1.5cm = 118
+    const CONTENT_W = A4_W - MARGIN * 2
+    const CONTENT_H = A4_H - MARGIN * 2
+
+    // Scale src vừa khít trong khung content (giữ tỉ lệ)
+    const scale = Math.min(CONTENT_W / src.width, CONTENT_H / src.height)
+    const drawW = src.width * scale
+    const drawH = src.height * scale
+    const offsetX = MARGIN + (CONTENT_W - drawW) / 2
+    const offsetY = MARGIN + (CONTENT_H - drawH) / 2
+
+    // Tạo canvas A4 trắng và vẽ bảng vào giữa
+    const out = document.createElement('canvas')
+    out.width = A4_W
+    out.height = A4_H
+    const ctx = out.getContext('2d')!
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, A4_W, A4_H)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(src, offsetX, offsetY, drawW, drawH)
+
+    // Viền nhẹ quanh khung lề (giúp người dùng thấy lề 1.5cm rõ ràng khi in)
+    ctx.strokeStyle = '#e5e7eb'
+    ctx.lineWidth = 1
+    ctx.strokeRect(MARGIN, MARGIN, CONTENT_W, CONTENT_H)
+
     const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `lich-truc-thang-${month}-${year}.png`
+    a.href = out.toDataURL('image/png', 1.0)
+    a.download = `lich-truc-thang-${month}-${year}-A4.png`
     a.click()
   }
 
@@ -476,9 +509,9 @@ export default function SchedulesPage() {
                                   const tone = isLD ? 'bg-amber-50 border border-amber-300' : type==='BS' ? 'bg-blue-50 border border-blue-200' : 'bg-green-50 border border-green-200'
                                   return (
                                     <div key={s.id} className={`group rounded-md px-1.5 py-1 ${tone}`}>
-                                      <div className="flex items-center gap-1.5 text-[13px]">
-                                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
-                                        <span className="flex-1 leading-tight font-semibold text-gray-800 truncate" title={s.user?.fullName}>
+                                      <div className="flex items-start gap-1.5 text-[13px]">
+                                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 mt-0.5 ${codeCls}`} title={`Mã ca: ${code}`}>{code}</span>
+                                        <span className="flex-1 leading-tight font-semibold text-gray-800 break-words" title={s.user?.fullName}>
                                           {s.user?.fullName}
                                         </span>
                                         <div className="hidden group-hover:flex gap-1 shrink-0">
@@ -518,9 +551,9 @@ export default function SchedulesPage() {
                                     const codeCls = SHIFT_CODE_COLORS[code] || 'bg-gray-100 text-gray-700 border-gray-300'
                                     return (
                                       <div key={s.id} className="group rounded-md px-1.5 py-1 bg-amber-50 border border-amber-300">
-                                        <div className="flex items-center gap-1.5 text-[13px]">
-                                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 ${codeCls}`}>{code}</span>
-                                          <span className="flex-1 leading-tight font-semibold text-amber-900 truncate">{s.user?.fullName}</span>
+                                        <div className="flex items-start gap-1.5 text-[13px]">
+                                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 mt-0.5 ${codeCls}`}>{code}</span>
+                                          <span className="flex-1 leading-tight font-semibold text-amber-900 break-words">{s.user?.fullName}</span>
                                           <div className="hidden group-hover:flex gap-1 shrink-0">
                                             {isAdmin && <button onClick={()=>handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm">✕</button>}
                                           </div>

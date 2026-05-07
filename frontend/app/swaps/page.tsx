@@ -61,6 +61,13 @@ export default function SwapsPage() {
     catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
   }
 
+  const handleAdminDelete = async (id: string, status: string) => {
+    const label = status === 'approved' ? 'đã duyệt' : status === 'rejected' ? 'đã từ chối' : 'đang chờ'
+    if (!confirm(`Xoá vĩnh viễn đơn đổi trực (${label})? Thao tác không thể hoàn tác.`)) return
+    try { await swapApi.cancel(id); load() }
+    catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
   const isAdmin = user?.role === 'admin'
   const canCreate = isAdmin || user?.role === 'department_lead'
 
@@ -207,6 +214,11 @@ export default function SwapsPage() {
                         <button onClick={()=>handleReject(s.id)}
                           className="border border-red-300 text-red-600 px-3 py-1 rounded text-xs hover:bg-red-50">✕ Từ chối</button>
                       </>
+                    )}
+                    {isAdmin && (
+                      <button onClick={()=>handleAdminDelete(s.id, s.status)}
+                        className="border border-red-400 text-red-700 px-3 py-1 rounded text-xs hover:bg-red-50"
+                        title="Xoá đơn (mọi trạng thái)">🗑️ Xoá đơn</button>
                     )}
                     {!isAdmin && s.status === 'pending' && s.requesterId === user.id && (
                       <button onClick={()=>handleCancel(s.id)}
