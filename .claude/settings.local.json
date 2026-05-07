@@ -58,7 +58,15 @@
       "Bash(cd \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app\" && rm backend/src/routes/public.routes.ts 2>&1 *)",
       "Bash(curl -s \"http://localhost:4000/api/public/schedules?year=2026&month=5\")",
       "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/frontend/app/cham-truc/page.tsx\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/frontend/app/cham-truc/page.tsx\")",
-      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT code, name, is_active FROM departments WHERE code='LANHDAO';\")"
+      "Bash(PGPASSWORD=\"duty123_manh_hon\" \"C:/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U duty_user -d duty_roster -c \"SELECT code, name, is_active FROM departments WHERE code='LANHDAO';\")",
+      "Bash(where cloudflared *)",
+      "Bash(cp \"C:/Users/MAI_KHNV/.cloudflared/chamtruclc.yml\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/ops/cloudflared.yml\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/.cloudflared/6f0296b5-492b-47b7-9b50-1c75253ec57e.json\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/ops/\")",
+      "Bash(cp \"C:/Users/MAI_KHNV/.cloudflared/cert.pem\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/ops/cert.pem\")",
+      "Bash(rm -f \"C:/Users/MAI_KHNV/Desktop/setup-autostart.ps1\" 2>&1 *)",
+      "Bash(\"C:/Program Files \\(x86\\)/cloudflared/cloudflared.exe\" tunnel --config \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/ops/cloudflared.yml\" run)",
+      "Bash(curl -s -m 5 https://api.congtruclienchieu.io.vn/health)",
+      "Bash(cp \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/.claude/worktrees/hardcore-pascal-4a6cb4/backend/src/routes/department.routes.ts\" \"C:/Users/MAI_KHNV/Desktop/duty-roster-app/duty-roster-app/backend/src/routes/department.routes.ts\")"
     ]
   }
 }

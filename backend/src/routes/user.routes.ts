@@ -181,9 +181,9 @@ async function ensureLanhDaoMembership(userId: string, title?: string | null) {
 }
 
 /**
- * POST /api/users (admin only)
+ * POST /api/users — admin tạo bất kỳ; dept_lead chỉ tạo user thuộc khoa mình
  */
-router.post('/', authenticate, authorize('admin'), async (req, res) => {
+router.post('/', authenticate, authorize('admin', 'department_lead'), async (req, res) => {
   const schema = z.object({
     username: z.string().min(3),
     password: z.string().min(6),
@@ -201,6 +201,20 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
 
   const { password, departmentIds, departmentId, ...rest } = parsed.data;
+
+  // Dept_lead: chặn role admin/department_lead, chỉ tạo nhân viên trong khoa mình
+  if (req.user!.role === 'department_lead') {
+    if (rest.role && rest.role !== 'staff') {
+      return res.status(403).json({ error: 'Trưởng đơn vị chỉ tạo được tài khoản nhân viên thường' });
+    }
+    rest.role = 'staff';
+    const myDept = req.user!.departmentId;
+    const allowed = (departmentIds || (departmentId ? [departmentId] : [])).every(d => d === myDept);
+    if (!allowed) {
+      return res.status(403).json({ error: 'Chỉ được tạo nhân viên thuộc khoa của bạn' });
+    }
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
 
   // Hỗ trợ cả 2 dạng input: departmentIds[] (đa khoa) hoặc departmentId (1 khoa)
@@ -226,9 +240,27 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 });
 
 /**
- * PATCH /api/users/:id
+ * PATCH /api/users/:id — admin sua bat ky; dept_lead chi sua user trong khoa minh
  */
-router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.patch('/:id', authenticate, authorize('admin', 'department_lead'), async (req, res) => {
+  // Dept_lead: chỉ được sửa user thuộc khoa mình
+  if (req.user!.role === 'department_lead') {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id as string },
+      include: { userDepartments: true },
+    });
+    if (!target) return res.status(404).json({ error: 'Không tìm thấy' });
+    const inMyDept = target.departmentId === req.user!.departmentId
+      || target.userDepartments.some(ud => ud.departmentId === req.user!.departmentId);
+    if (!inMyDept) {
+      return res.status(403).json({ error: 'Chỉ được sửa nhân viên thuộc khoa của bạn' });
+    }
+    // Không cho dept_lead đổi role hoặc chuyển user ra khỏi dept của mình
+    if (req.body.role && req.body.role !== 'staff') {
+      return res.status(403).json({ error: 'Trưởng đơn vị không được đổi vai trò' });
+    }
+  }
+
   const updateSchema = z.object({
     fullName: z.string().min(1).optional(),
     email: z.string().email().optional(),
@@ -304,9 +336,19 @@ router.post('/:id/revoke-login', authenticate, authorize('admin'), async (req, r
 });
 
 /**
- * DELETE /api/users/:id (soft delete)
+ * DELETE /api/users/:id (soft delete) — admin or dept_lead (own dept only)
  */
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticate, authorize('admin', 'department_lead'), async (req, res) => {
+  if (req.user!.role === 'department_lead') {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id as string },
+      include: { userDepartments: true },
+    });
+    if (!target) return res.status(404).json({ error: 'Không tìm thấy' });
+    const inMyDept = target.departmentId === req.user!.departmentId
+      || target.userDepartments.some(ud => ud.departmentId === req.user!.departmentId);
+    if (!inMyDept) return res.status(403).json({ error: 'Chỉ được xóa nhân viên thuộc khoa của bạn' });
+  }
   await prisma.user.update({
     where: { id: req.params.id as string },
     data: { isActive: false },
