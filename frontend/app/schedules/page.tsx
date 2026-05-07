@@ -20,6 +20,17 @@ const SHIFT_CODE_COLORS: Record<string, string> = {
   THS: 'bg-indigo-100 text-indigo-800 border-indigo-300',
   CHS: 'bg-purple-100 text-purple-800 border-purple-300',
   LHS: 'bg-pink-100 text-pink-800 border-pink-300',
+  TLD: 'bg-amber-100 text-amber-900 border-amber-400',
+  CLD: 'bg-red-100 text-red-900 border-red-400',
+  LLD: 'bg-rose-200 text-rose-900 border-rose-400',
+}
+
+// Title được tính là Bác sĩ (cột BS): bao gồm cả Trưởng khoa, Phó khoa, Giám đốc
+const isDoctorTitle = (title?: string) => {
+  if (!title) return false
+  const t = title.toLowerCase()
+  return t.includes('bác sĩ') || t.includes('lãnh đạo')
+    || /tr[ưu]ởng\s*khoa|ph[óo]\s*tr[ưu]ởng\s*khoa|ph[óo]\s*khoa|gi[áa]m\s*đ[ốo]c/.test(t)
 }
 
 export default function SchedulesPage() {
@@ -145,7 +156,7 @@ export default function SchedulesPage() {
       const dept = s.departmentId
       if (!m[d]) m[d] = {}
       if (!m[d][dept]) m[d][dept] = { bs: [], dd: [] }
-      const isBs = s.user?.title === 'Bác sĩ' || s.user?.title?.toLowerCase().includes('bác sĩ') || s.user?.title?.toLowerCase().includes('lãnh đạo')
+      const isBs = isDoctorTitle(s.user?.title)
       ;(isBs ? m[d][dept].bs : m[d][dept].dd).push(s)
     }
     return m

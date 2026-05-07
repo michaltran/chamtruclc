@@ -42,6 +42,7 @@ const titleRank = (title?: string) => {
   const t = title.toLowerCase()
   if (t.includes('bác sĩ') || t === 'bs') return 0
   if (t.includes('lãnh đạo')) return 1
+  if (/tr[ưu]ởng\s*khoa|ph[óo]\s*tr[ưu]ởng\s*khoa|ph[óo]\s*khoa|gi[áa]m\s*đ[ốo]c/.test(t)) return 0
   if (t.includes('điều dưỡng') || t.includes('hộ sinh') || t.includes('kỹ thuật')) return 2
   return 50
 }
@@ -56,6 +57,9 @@ const SHIFT_CODE_COLORS: Record<string, string> = {
   THS: 'bg-indigo-100 text-indigo-800',
   CHS: 'bg-purple-100 text-purple-800',
   LHS: 'bg-pink-100 text-pink-800',
+  TLD: 'bg-amber-100 text-amber-900',
+  CLD: 'bg-red-100 text-red-900',
+  LLD: 'bg-rose-200 text-rose-900',
 }
 
 const SHIFT_CODE_NAMES: Record<string, string> = {
@@ -68,6 +72,9 @@ const SHIFT_CODE_NAMES: Record<string, string> = {
   THS: 'Phiên trực ngày thường hồi sức hồi tỉnh 24/24',
   CHS: 'Phiên trực thứ 7, CN hồi sức hồi tỉnh 24/24',
   LHS: 'Phiên trực ngày Lễ, tết hồi sức hồi tỉnh 24/24',
+  TLD: 'Trực Lãnh đạo ngày thường 24/24',
+  CLD: 'Trực Lãnh đạo thứ 7, CN 24/24',
+  LLD: 'Trực Lãnh đạo ngày Lễ, tết 24/24',
 }
 
 // Đúng layout sheet "Chấm trực ALL T*" của TTYT KV Liên Chiểu:
@@ -80,6 +87,9 @@ const SHIFT_CODE_NAMES: Record<string, string> = {
 //   Tổng cộng      = sum 9 ô đếm
 const COUNT_COLS = ['TC','T','THS','CC','C','CHS','LC','L','LHS'] as const
 type CountCode = typeof COUNT_COLS[number]
+// Mã ca lãnh đạo riêng — dùng cho bảng tách Lãnh đạo
+const LD_COUNT_COLS = ['TLD','CLD','LLD'] as const
+type LdCode = typeof LD_COUNT_COLS[number]
 
 export default function ChamTrucPage() {
   const router = useRouter()
@@ -238,24 +248,42 @@ export default function ChamTrucPage() {
           })
           // Loại admin (quản lý) — admin không phải thành viên trực
           const dutyUsers = allUsers.filter(u => u.role !== 'admin')
+          const userById = new Map(dutyUsers.map(u => [u.id, u]))
 
-          // Assign each user to a parent group based on their primary dept (or any dept they have schedule in)
-          const userToParent: Record<string, string> = {}
+          // 1) User vào nhóm khoa cha theo HOME (primary dept) — không kể Lãnh đạo
+          const homeParentByUser: Record<string, string> = {}
           dutyUsers.forEach(u => {
-            // Lấy department code chính
             const primaryDept = (u.departments || []).find((d:any) => d.isPrimary) || (u.departments || [])[0]
             const code = primaryDept?.code || allDepts.find(d => d.id === u.departmentId)?.code
-            if (code && PARENT_GROUP[code]) userToParent[u.id] = PARENT_GROUP[code]
+            const parent = code ? PARENT_GROUP[code] : undefined
+            if (parent && parent !== 'Lãnh đạo') homeParentByUser[u.id] = parent
           })
-          // Người có ca trực ở khoa nào → thuộc parent group đó
+
+          // 2) Người chưa có home → suy ra từ schedule khoa chuyên môn (không tính LANHDAO)
           schedules.forEach(s => {
-            if (userToParent[s.userId]) return
+            if (homeParentByUser[s.userId]) return
             const code = allDepts.find(d => d.id === s.departmentId)?.code
-            if (code && PARENT_GROUP[code]) userToParent[s.userId] = PARENT_GROUP[code]
+            if (code && code !== 'LANHDAO' && PARENT_GROUP[code]) {
+              homeParentByUser[s.userId] = PARENT_GROUP[code]
+            }
           })
-          dutyUsers.forEach(u => {
-            const parent = userToParent[u.id]
-            if (parent && groups[parent]) groups[parent].users.push(u)
+
+          // 3) Push vào nhóm khoa
+          Object.entries(homeParentByUser).forEach(([uid, parent]) => {
+            const u = userById.get(uid)
+            if (u && groups[parent]) groups[parent].users.push(u)
+          })
+
+          // 4) Nhóm Lãnh đạo: BẤT KỲ user nào có schedule ở khoa LANHDAO đều được chấm thêm
+          //    Họ vẫn xuất hiện ở khoa chuyên môn của họ (1 dòng) và đồng thời 1 dòng ở Lãnh đạo
+          const ldUserIds = new Set<string>()
+          schedules.forEach(s => {
+            const code = allDepts.find(d => d.id === s.departmentId)?.code
+            if (code === 'LANHDAO') ldUserIds.add(s.userId)
+          })
+          ldUserIds.forEach(uid => {
+            const u = userById.get(uid)
+            if (u && groups['Lãnh đạo']) groups['Lãnh đạo'].users.push(u)
           })
           // Sort users in each group: BS trước, ĐD sau
           Object.values(groups).forEach(g => {
@@ -267,12 +295,117 @@ export default function ChamTrucPage() {
           })
           const orderedGroups = PARENT_ORDER.map(name => groups[name]).filter(g => g && g.users.length > 0)
 
+          // Hàm helper: build attend & counts cho 1 group, dedupe theo (user, day) — 1 công/ngày/group
+          const buildGroupMaps = (groupDeptIds: string[]) => {
+            const groupAttend: Record<string, Record<number, string>> = {}
+            const groupCounts: Record<string, Record<string, number>> = {}
+            const userDays: Record<string, Set<number>> = {}
+            const groupSchedules = schedules.filter(s => groupDeptIds.includes(s.departmentId))
+            for (const s of groupSchedules) {
+              const day = new Date(s.shiftDate).getDate()
+              const code = s.shiftType?.code || 'T'
+              if (!userDays[s.userId]) userDays[s.userId] = new Set()
+              if (userDays[s.userId].has(day)) continue // dedupe: 1 user 1 ngày = 1 công trong nhóm
+              userDays[s.userId].add(day)
+              groupAttend[s.userId] = groupAttend[s.userId] || {}
+              groupAttend[s.userId][day] = code
+              groupCounts[s.userId] = groupCounts[s.userId] || {}
+              groupCounts[s.userId][code] = (groupCounts[s.userId][code] || 0) + 1
+            }
+            return { groupAttend, groupCounts }
+          }
+
+          // Ld dùng riêng — bảng đơn giản hơn (3 mã LD, không có BS/ĐD split)
+          const renderLdGroup = (group: any) => {
+            const { groupAttend, groupCounts } = buildGroupMaps(group.deptIds)
+            // Day total Ld (số người trực lãnh đạo mỗi ngày)
+            const dayTotals: Record<number, number> = {}
+            Object.values(groupAttend).forEach(map => {
+              Object.keys(map).forEach(d => { dayTotals[+d] = (dayTotals[+d] || 0) + 1 })
+            })
+            // Code totals
+            const codeTotals: Record<string, number> = { TLD:0, CLD:0, LLD:0 }
+            Object.values(groupCounts).forEach(c => {
+              LD_COUNT_COLS.forEach(k => { codeTotals[k] += c[k] || 0 })
+            })
+            const grand = codeTotals.TLD + codeTotals.CLD + codeTotals.LLD
+            return (
+              <div key="ld-group" className="bg-white rounded-xl shadow-sm overflow-hidden print:rounded-none print:shadow-none print:break-inside-avoid border-2 border-amber-300">
+                <div className="bg-amber-500 text-white px-4 py-2 print:bg-amber-100 print:text-amber-900">
+                  <h2 className="font-bold text-sm uppercase tracking-wide">★ Trực Lãnh đạo</h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-amber-50">
+                        <th className="border px-2 py-1 text-center font-semibold w-10">STT</th>
+                        <th className="border px-2 py-1 text-left font-semibold min-w-[160px]">Họ và tên</th>
+                        {dayLabels.map(({d, dow, isWeekend}) => (
+                          <th key={d} className={`border px-1 py-1 text-center w-9 ${isWeekend ? 'bg-orange-100 text-orange-700' : 'text-amber-800'}`}>
+                            <div className="text-[10px]">{d}</div>
+                            <div className="text-[8px] opacity-70">{dow}</div>
+                          </th>
+                        ))}
+                        {LD_COUNT_COLS.map(c => (
+                          <th key={c} className={`border px-1 py-1 text-center w-10 text-[10px] font-bold ${SHIFT_CODE_COLORS[c]}`}>{c}</th>
+                        ))}
+                        <th className="border px-1 py-1 text-center font-bold text-amber-900 bg-amber-100 w-12">Tổng</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.users.map((u: any, idx: number) => {
+                        const userAttend = groupAttend[u.id] || {}
+                        const userCounts = groupCounts[u.id] || {}
+                        const total = (userCounts.TLD||0) + (userCounts.CLD||0) + (userCounts.LLD||0)
+                        return (
+                          <tr key={u.id} className="hover:bg-amber-50/40">
+                            <td className="border px-2 py-1 text-center text-gray-500">{idx+1}</td>
+                            <td className="border px-2 py-1 font-medium text-gray-800 whitespace-nowrap">
+                              {u.fullName}
+                              {u.title && <span className="ml-1 text-gray-400 font-normal text-[10px]">({u.title})</span>}
+                            </td>
+                            {dayLabels.map(({d, isWeekend}) => {
+                              const code = userAttend[d]
+                              const cls = code ? (SHIFT_CODE_COLORS[code] || 'bg-gray-100') : ''
+                              return (
+                                <td key={d} className={`border px-0.5 py-0.5 text-center ${isWeekend ? 'bg-orange-50/30' : ''}`}>
+                                  {code && <span className={`inline-block rounded px-0.5 text-[9px] font-bold ${cls}`}>{code}</span>}
+                                </td>
+                              )
+                            })}
+                            {LD_COUNT_COLS.map(c => (
+                              <td key={c} className="border px-1 py-1 text-center text-[10px]">{userCounts[c] || ''}</td>
+                            ))}
+                            <td className="border px-1 py-1 text-center bg-amber-200 text-amber-900 font-bold">{total || ''}</td>
+                          </tr>
+                        )
+                      })}
+                      {/* Tổng cộng riêng cho Lãnh đạo */}
+                      <tr className="bg-amber-100 border-t-2 border-amber-400 font-bold">
+                        <td colSpan={2} className="border px-2 py-1.5 text-amber-900 text-center uppercase">TỔNG CỘNG LÃNH ĐẠO</td>
+                        {dayLabels.map(({d}) => (
+                          <td key={d} className="border px-0.5 py-1 text-center text-amber-900 text-[11px]">{dayTotals[d] || ''}</td>
+                        ))}
+                        {LD_COUNT_COLS.map(c => (
+                          <td key={c} className="border px-1 py-1 text-center text-amber-900">{codeTotals[c] || ''}</td>
+                        ))}
+                        <td className="border px-1 py-1 text-center bg-amber-300 text-amber-900 text-base">{grand || ''}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          }
+
           return (<>
           <div className="space-y-6 print:space-y-3">
             {orderedGroups.map(group => {
               const allDeptUsers = group.users
               if (allDeptUsers.length === 0) return null
+              if (group.name === 'Lãnh đạo') return renderLdGroup(group)
               const dept = { id: group.deptIds.join(','), name: group.name, code: group.name }
+              const { groupAttend, groupCounts } = buildGroupMaps(group.deptIds)
 
               return (
                 <div key={dept.id} className="bg-white rounded-xl shadow-sm overflow-hidden print:rounded-none print:shadow-none print:break-inside-avoid">
@@ -315,8 +448,8 @@ export default function ChamTrucPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {allDeptUsers.map((u, idx) => {
-                          const userAttend = attendMap[u.id] || {}
-                          const userCounts = counts[u.id]
+                          const userAttend = groupAttend[u.id] || {}
+                          const userCounts = (groupCounts[u.id] || {}) as Record<CountCode, number>
                           const ccTotal = sumGroup(userCounts, ['TC','CC','LC'])
                           const normTotal = sumGroup(userCounts, ['T','C','L'])
                           const hsTotal = sumGroup(userCounts, ['THS','CHS','LHS'])
@@ -369,32 +502,39 @@ export default function ChamTrucPage() {
               </div>
             )}
 
-            {/* TỔNG CỘNG TOÀN VIỆN — grand total cho 1 ngày trên toàn bộ khoa phòng */}
+            {/* TỔNG CỘNG CÁC KHOA CHUYÊN MÔN — không tính lịch trực Lãnh đạo (đã có bảng riêng phía trên) */}
             {schedules.length > 0 && (() => {
+              // Dedupe: 1 user 1 ngày trong cùng group = 1 công.
+              // Để tổng đúng, đếm cho mỗi group rồi cộng lại.
               const dayTotalsAll: Record<number, number> = {}
               const codeTotalsAll: Record<string, number> = { TC:0,T:0,THS:0,CC:0,C:0,CHS:0,LC:0,L:0,LHS:0 }
-              schedules.forEach(s => {
-                const d = new Date(s.shiftDate).getDate()
-                dayTotalsAll[d] = (dayTotalsAll[d] || 0) + 1
-                const code = s.shiftType?.code || 'T'
-                if (codeTotalsAll[code] !== undefined) codeTotalsAll[code]++
-              })
+              orderedGroups
+                .filter(g => g.name !== 'Lãnh đạo')
+                .forEach(g => {
+                  const { groupAttend, groupCounts } = buildGroupMaps(g.deptIds)
+                  Object.values(groupAttend).forEach(map => {
+                    Object.keys(map).forEach(d => { dayTotalsAll[+d] = (dayTotalsAll[+d] || 0) + 1 })
+                  })
+                  Object.values(groupCounts).forEach(c => {
+                    COUNT_COLS.forEach(k => { codeTotalsAll[k] += c[k] || 0 })
+                  })
+                })
               const ccA = codeTotalsAll.TC + codeTotalsAll.CC + codeTotalsAll.LC
               const noA = codeTotalsAll.T + codeTotalsAll.C + codeTotalsAll.L
               const hsA = codeTotalsAll.THS + codeTotalsAll.CHS + codeTotalsAll.LHS
               const allA = ccA + noA + hsA
               return (
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden border-2 border-amber-400">
-                  <div className="bg-amber-500 text-white px-4 py-2">
-                    <h2 className="font-bold text-sm uppercase tracking-wide">TỔNG CỘNG TOÀN VIỆN — Tháng {month}/{year}</h2>
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden border-2 border-blue-400">
+                  <div className="bg-blue-700 text-white px-4 py-2">
+                    <h2 className="font-bold text-sm uppercase tracking-wide">TỔNG CỘNG CÁC KHOA CHUYÊN MÔN — Tháng {month}/{year}</h2>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-xs border-collapse">
                       <thead>
-                        <tr className="bg-amber-50">
-                          <th colSpan={2} className="border px-2 py-1 text-left font-bold text-amber-900 min-w-[210px]">Số phiên trực mỗi ngày</th>
+                        <tr className="bg-blue-50">
+                          <th colSpan={2} className="border px-2 py-1 text-left font-bold text-blue-900 min-w-[210px]">Số phiên trực mỗi ngày</th>
                           {dayLabels.map(({d, dow, isWeekend}) => (
-                            <th key={d} className={`border px-1 py-1 text-center w-9 ${isWeekend ? 'bg-orange-100 text-orange-700' : 'text-amber-800'}`}>
+                            <th key={d} className={`border px-1 py-1 text-center w-9 ${isWeekend ? 'bg-orange-100 text-orange-700' : 'text-blue-800'}`}>
                               <div className="text-[10px]">{d}</div>
                               <div className="text-[8px] opacity-70">{dow}</div>
                             </th>
@@ -405,12 +545,12 @@ export default function ChamTrucPage() {
                           <th className="border px-1 py-1 text-center font-bold text-red-700 bg-red-50">TC ngày CC</th>
                           <th className="border px-1 py-1 text-center font-bold text-blue-700 bg-blue-50">TC ngày thường</th>
                           <th className="border px-1 py-1 text-center font-bold text-indigo-700 bg-indigo-50">TC trực Hồi sức</th>
-                          <th className="border px-1 py-1 text-center font-bold text-amber-900 bg-amber-100">Tổng cộng</th>
+                          <th className="border px-1 py-1 text-center font-bold text-blue-900 bg-blue-100">Tổng cộng</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr className="font-bold">
-                          <td colSpan={2} className="border px-2 py-2 text-right text-amber-900 bg-amber-50">Toàn viện</td>
+                          <td colSpan={2} className="border px-2 py-2 text-right text-blue-900 bg-blue-50">Toàn các khoa chuyên môn</td>
                           {dayLabels.map(({d}) => (
                             <td key={d} className="border px-0.5 py-2 text-center text-gray-800 text-[11px]">
                               {dayTotalsAll[d] || ''}
@@ -424,10 +564,13 @@ export default function ChamTrucPage() {
                           <td className="border px-1 py-2 text-center bg-red-100 text-red-800">{ccA || ''}</td>
                           <td className="border px-1 py-2 text-center bg-blue-100 text-blue-800">{noA || ''}</td>
                           <td className="border px-1 py-2 text-center bg-indigo-100 text-indigo-800">{hsA || ''}</td>
-                          <td className="border px-1 py-2 text-center bg-amber-200 text-amber-900 text-base">{allA || ''}</td>
+                          <td className="border px-1 py-2 text-center bg-blue-200 text-blue-900 text-base">{allA || ''}</td>
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                  <div className="px-4 py-2 text-[10px] text-gray-500 italic">
+                    * Tổng cộng Lãnh đạo được hiển thị riêng trong bảng "Trực Lãnh đạo" phía trên.
                   </div>
                 </div>
               )
