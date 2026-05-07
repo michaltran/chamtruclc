@@ -70,7 +70,7 @@ export default function UsersPage() {
     catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
   }
 
-  const roleLabel: Record<string,string> = { admin:'Quản trị', department_lead:'Trưởng khoa', staff:'Nhân viên' }
+  const roleLabel: Record<string,string> = { admin:'Quản trị', department_lead:'Trưởng đơn vị', staff:'Nhân viên' }
   const roleBadge: Record<string,string> = { admin:'bg-purple-100 text-purple-800', department_lead:'bg-blue-100 text-blue-800', staff:'bg-gray-100 text-gray-700' }
 
   return (
@@ -176,12 +176,12 @@ export default function UsersPage() {
                     className="w-full border rounded-lg px-3 py-2 mt-1 text-sm"/>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Vai trò</label>
+                  <label className="text-sm font-medium text-gray-700">Vai trò hệ thống</label>
                   <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}
                     className="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
-                    <option value="staff">Nhân viên</option>
-                    <option value="department_lead">Trưởng khoa</option>
-                    <option value="admin">Quản trị</option>
+                    <option value="staff">Nhân viên (chỉ xem lịch của mình)</option>
+                    <option value="department_lead">Trưởng đơn vị (Trưởng khoa / ĐD trưởng / KTV trưởng)</option>
+                    <option value="admin">Quản trị (P. KH-NV / Ban Giám đốc)</option>
                   </select>
                 </div>
                 <div>
@@ -193,9 +193,25 @@ export default function UsersPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Chức danh</label>
+                  <label className="text-sm font-medium text-gray-700">Chức danh / Vị trí</label>
                   <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})}
-                    className="w-full border rounded-lg px-3 py-2 mt-1 text-sm"/>
+                    list="title-presets"
+                    className="w-full border rounded-lg px-3 py-2 mt-1 text-sm"
+                    placeholder="VD: Bác sĩ"/>
+                  <datalist id="title-presets">
+                    <option value="Bác sĩ"/>
+                    <option value="Trưởng khoa"/>
+                    <option value="Phó Trưởng khoa"/>
+                    <option value="Điều dưỡng trưởng"/>
+                    <option value="Kỹ thuật viên trưởng"/>
+                    <option value="Hộ sinh trưởng"/>
+                    <option value="Điều dưỡng"/>
+                    <option value="Hộ sinh"/>
+                    <option value="Kỹ thuật viên"/>
+                    <option value="Dược sĩ"/>
+                    <option value="Hộ lý"/>
+                    <option value="Lái xe"/>
+                  </datalist>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Điện thoại</label>
