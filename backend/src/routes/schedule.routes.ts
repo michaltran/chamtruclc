@@ -190,6 +190,21 @@ router.post(
         where: { id: data.departmentId },
         select: { code: true },
       });
+      // Mỗi ngày chỉ 1 lãnh đạo trực
+      if (dept?.code === 'LANHDAO') {
+        const existing = await prisma.schedule.findFirst({
+          where: {
+            departmentId: data.departmentId,
+            shiftDate: new Date(data.shiftDate),
+          },
+          include: { user: { select: { fullName: true } } },
+        });
+        if (existing) {
+          return res.status(409).json({
+            error: `Ngày này đã có lãnh đạo trực: ${existing.user.fullName}. Vui lòng xoá hoặc đổi sang ngày khác.`,
+          });
+        }
+      }
       const shiftTypeId = data.shiftTypeId
         || (await getDefaultShiftTypeForDate(prisma, new Date(data.shiftDate), dept?.code)).id;
       // is_weekend is a GENERATED column in DB → use raw SQL to skip it
