@@ -368,6 +368,47 @@ router.post('/:id/approve', authenticate, authorize('admin'), async (req, res) =
 });
 
 /**
+ * POST /api/schedules/approve-month
+ * Admin khoá toàn bộ lịch tháng (chuyển sang status='approved').
+ * Sau khi khoá, link công khai /api/public/schedules?year=&month= mới hiển thị.
+ */
+router.post('/approve-month', authenticate, authorize('admin'), async (req, res) => {
+  const { year, month } = req.body;
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  const result = await prisma.schedule.updateMany({
+    where: {
+      shiftDate: { gte: startDate, lte: endDate },
+      status: { in: ['draft', 'submitted'] },
+    },
+    data: {
+      status: 'approved',
+      approvedById: req.user!.id,
+      approvedAt: new Date(),
+    },
+  });
+  res.json({ approved: result.count });
+});
+
+/**
+ * POST /api/schedules/unlock-month
+ * Admin mở khoá tháng (chuyển approved → draft) khi cần chỉnh sửa lại.
+ */
+router.post('/unlock-month', authenticate, authorize('admin'), async (req, res) => {
+  const { year, month } = req.body;
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  const result = await prisma.schedule.updateMany({
+    where: {
+      shiftDate: { gte: startDate, lte: endDate },
+      status: { in: ['approved', 'submitted'] },
+    },
+    data: { status: 'draft', approvedById: null, approvedAt: null },
+  });
+  res.json({ unlocked: result.count });
+});
+
+/**
  * POST /api/schedules/submit-month
  * Đại diện khoa nộp lịch cuối tháng để admin duyệt
  */

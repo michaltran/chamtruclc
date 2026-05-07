@@ -101,6 +101,15 @@ export const scheduleExtraApi = {
     api.get('/schedules/lock-status', { params }).then(r=>r.data),
   duplicateFrom: (data: { fromYear:number; fromMonth:number; toYear:number; toMonth:number; departmentId?:string }) =>
     api.post('/schedules/duplicate-from', data).then(r=>r.data),
+  approveMonth: (year:number, month:number) =>
+    api.post('/schedules/approve-month', { year, month }).then(r=>r.data),
+  unlockMonth: (year:number, month:number) =>
+    api.post('/schedules/unlock-month', { year, month }).then(r=>r.data),
+};
+
+export const publicApi = {
+  getMonth: (year:number, month:number) =>
+    api.get('/public/schedules', { params: { year, month } }).then(r=>r.data),
 };
 
 export const departmentApi = {

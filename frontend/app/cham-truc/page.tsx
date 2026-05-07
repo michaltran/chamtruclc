@@ -68,7 +68,9 @@ export default function ChamTrucPage() {
     const u = localStorage.getItem('auth_user')
     if (!u) { router.push('/login'); return }
     const parsed = JSON.parse(u)
-    if (parsed.role !== 'admin') { router.push('/schedules'); return }
+    // Cho phép truy cập nếu role=admin HOẶC pages chứa 'cham-truc'
+    const allowed = parsed.role === 'admin' || (parsed.pages || []).includes('cham-truc')
+    if (!allowed) { router.push('/schedules'); return }
     setAuthUser(parsed)
   }, [router])
 

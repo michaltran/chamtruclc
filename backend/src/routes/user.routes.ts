@@ -31,7 +31,12 @@ router.get('/', authenticate, async (req, res) => {
 
   const users = await prisma.user.findMany({
     where,
-    include: { department: { select: { id: true, name: true, code: true } } },
+    include: {
+      department: { select: { id: true, name: true, code: true } },
+      userDepartments: {
+        include: { department: { select: { id: true, name: true, code: true } } },
+      },
+    },
     orderBy: { fullName: 'asc' },
   });
 
@@ -44,10 +49,15 @@ router.get('/', authenticate, async (req, res) => {
     permsByUser[p.userId] = (p.pages as string[]) || [];
   });
 
-  res.json(users.map(({ passwordHash, ...u }) => ({
+  res.json(users.map(({ passwordHash, userDepartments, ...u }) => ({
     ...u,
     canLogin: !!passwordHash,
     pages: permsByUser[u.id] || [],
+    departments: userDepartments.map(ud => ({
+      ...ud.department,
+      isPrimary: ud.isPrimary,
+    })),
+    departmentIds: userDepartments.map(ud => ud.departmentId),
   })));
 });
 
@@ -133,6 +143,21 @@ router.post('/import', authenticate, authorize('admin'), async (req, res) => {
   res.json({ created: created.length, skipped: skipped.length, details: { created, skipped } });
 });
 
+/** Sync a user's department memberships (multi-dept). primary = first id (or current primary). */
+async function syncUserDepartments(userId: string, deptIds: string[], primaryId?: string) {
+  const ids = [...new Set(deptIds)];
+  await prisma.userDepartment.deleteMany({ where: { userId } });
+  if (ids.length === 0) return;
+  const primary = primaryId && ids.includes(primaryId) ? primaryId : ids[0];
+  for (const did of ids) {
+    await prisma.userDepartment.create({
+      data: { userId, departmentId: did, isPrimary: did === primary },
+    });
+  }
+  // Cập nhật cột department_id của bảng users để giữ tương thích với code cũ
+  await prisma.user.update({ where: { id: userId }, data: { departmentId: primary } });
+}
+
 /**
  * POST /api/users (admin only)
  */
@@ -145,6 +170,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     employeeCode: z.string().optional(),
     role: z.enum(['admin', 'department_lead', 'staff']).default('staff'),
     departmentId: z.string().uuid().optional(),
+    departmentIds: z.array(z.string().uuid()).optional(),
     title: z.string().optional(),
     phone: z.string().optional(),
   });
@@ -152,13 +178,19 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
   const parsed = schema.safeParse(cleanEmpty(req.body));
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
 
-  const { password, ...rest } = parsed.data;
+  const { password, departmentIds, departmentId, ...rest } = parsed.data;
   const passwordHash = await bcrypt.hash(password, 10);
+
+  // Hỗ trợ cả 2 dạng input: departmentIds[] (đa khoa) hoặc departmentId (1 khoa)
+  const allDepts = (departmentIds && departmentIds.length > 0)
+    ? departmentIds
+    : (departmentId ? [departmentId] : []);
 
   try {
     const user = await prisma.user.create({
-      data: { ...rest, passwordHash },
+      data: { ...rest, passwordHash, departmentId: allDepts[0] },
     });
+    if (allDepts.length > 0) await syncUserDepartments(user.id, allDepts);
     const { passwordHash: _, ...safeUser } = user;
     res.status(201).json(safeUser);
   } catch (err: any) {
@@ -179,6 +211,7 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
     employeeCode: z.string().optional(),
     role: z.enum(['admin', 'department_lead', 'staff']).optional(),
     departmentId: z.string().uuid().optional(),
+    departmentIds: z.array(z.string().uuid()).optional(),
     title: z.string().optional(),
     phone: z.string().optional(),
     isActive: z.boolean().optional(),
@@ -186,11 +219,20 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
   const parsed = updateSchema.safeParse(cleanEmpty(req.body));
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
 
+  const { departmentIds, departmentId, ...rest } = parsed.data;
+  const id = req.params.id as string;
+
   try {
     const updated = await prisma.user.update({
-      where: { id: req.params.id as string },
-      data: parsed.data,
+      where: { id },
+      data: rest,
     });
+    // Sync multi-dept if provided
+    if (departmentIds !== undefined) {
+      await syncUserDepartments(id, departmentIds, departmentId);
+    } else if (departmentId !== undefined) {
+      await syncUserDepartments(id, [departmentId]);
+    }
     const { passwordHash: _, ...safeUser } = updated;
     res.json(safeUser);
   } catch (err: any) {

@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import { swapApi } from '@/lib/api'
+import { swapApi, scheduleApi, userApi } from '@/lib/api'
 import { format } from 'date-fns'
 
 const STATUS_LABEL: Record<string,string> = { pending:'Chờ duyệt', approved:'Đã duyệt', rejected:'Đã từ chối' }
@@ -19,6 +19,12 @@ export default function SwapsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('')
   const [printSwap, setPrintSwap] = useState<any>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [allUsers, setAllUsers] = useState<any[]>([])
+  const [recentSchedules, setRecentSchedules] = useState<any[]>([])
+  const [createForm, setCreateForm] = useState<{ scheduleId:string; targetUserId:string; reason:string; mode:'form'|'pdf'; pdfBase64:string; pdfFilename:string }>({
+    scheduleId:'', targetUserId:'', reason:'', mode:'form', pdfBase64:'', pdfFilename:''
+  })
 
   useEffect(() => {
     const u = localStorage.getItem('auth_user')
@@ -56,6 +62,58 @@ export default function SwapsPage() {
   }
 
   const isAdmin = user?.role === 'admin'
+  const canCreate = isAdmin || user?.role === 'department_lead'
+
+  const openCreateSwap = async () => {
+    try {
+      // Load schedules for current and next month + users
+      const now = new Date()
+      const [s1, s2, us] = await Promise.all([
+        scheduleApi.list({ year: now.getFullYear(), month: now.getMonth() + 1 }),
+        scheduleApi.list({ year: now.getFullYear(), month: now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2 }).catch(()=>[]),
+        userApi.list(),
+      ])
+      const merged = [...s1, ...s2].sort((a:any,b:any) =>
+        new Date(a.shiftDate).getTime() - new Date(b.shiftDate).getTime())
+      setRecentSchedules(merged)
+      setAllUsers(us)
+      setCreateForm({ scheduleId:'', targetUserId:'', reason:'', mode:'form', pdfBase64:'', pdfFilename:'' })
+      setShowCreate(true)
+    } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  const handleCreatePdfPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.type !== 'application/pdf') { alert('Chỉ chấp nhận PDF'); return }
+    if (f.size > 5 * 1024 * 1024) { alert('Tối đa 5MB'); return }
+    const reader = new FileReader()
+    reader.onload = () => setCreateForm(p => ({ ...p, pdfBase64: reader.result as string, pdfFilename: f.name }))
+    reader.readAsDataURL(f)
+  }
+
+  const submitCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const payload: any = {
+        scheduleId: createForm.scheduleId,
+        targetUserId: createForm.targetUserId,
+        reason: createForm.reason,
+      }
+      if (createForm.mode === 'pdf' && createForm.pdfBase64) {
+        payload.signedFormPdf = createForm.pdfBase64
+        payload.signedFormFilename = createForm.pdfFilename
+      }
+      await swapApi.create(payload)
+      setShowCreate(false)
+      load()
+      alert('Đã tạo phiếu đổi trực — chờ admin duyệt')
+    } catch(err:any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+
+  const selectedSchedule = useMemo(() =>
+    recentSchedules.find(s => s.id === createForm.scheduleId)
+  , [recentSchedules, createForm.scheduleId])
 
   if (!user) return null
 
@@ -72,6 +130,12 @@ export default function SwapsPage() {
             <option value="approved">Đã duyệt</option>
             <option value="rejected">Đã từ chối</option>
           </select>
+          {canCreate && (
+            <button onClick={openCreateSwap}
+              className="bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-orange-700">
+              + Tạo phiếu đổi trực
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -155,6 +219,103 @@ export default function SwapsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: tạo phiếu đổi trực mới (form hoặc upload PDF) */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl my-auto">
+            <div className="flex border-b">
+              <button onClick={()=>setCreateForm(p=>({...p,mode:'form'}))}
+                className={`flex-1 py-3 text-sm font-medium ${createForm.mode==='form' ? 'text-blue-700 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                ✍️ Nhập đơn trên hệ thống
+              </button>
+              <button onClick={()=>setCreateForm(p=>({...p,mode:'pdf'}))}
+                className={`flex-1 py-3 text-sm font-medium ${createForm.mode==='pdf' ? 'text-blue-700 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>
+                📎 Tải đơn PDF đã ký
+              </button>
+            </div>
+
+            <form onSubmit={submitCreate} className="px-6 py-5 space-y-3 text-sm">
+              <h2 className="text-base font-bold text-gray-800">Tạo phiếu đổi trực</h2>
+
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">
+                  Ca trực cần đổi <span className="text-red-500">*</span>
+                </label>
+                <select value={createForm.scheduleId} onChange={e=>setCreateForm(p=>({...p,scheduleId:e.target.value}))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" required>
+                  <option value="">— Chọn ca trực —</option>
+                  {recentSchedules.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {format(new Date(s.shiftDate),'dd/MM')} — {s.user?.fullName} — {s.department?.name} ({s.shiftType?.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">Hiển thị ca trực 2 tháng gần nhất.</p>
+              </div>
+
+              {selectedSchedule && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs space-y-1">
+                  <div>👤 {selectedSchedule.user?.fullName}</div>
+                  <div>📅 {format(new Date(selectedSchedule.shiftDate),'EEEE, dd/MM/yyyy')}</div>
+                  <div>🏥 {selectedSchedule.department?.name} — Mã ca <b>{selectedSchedule.shiftType?.code}</b></div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">
+                  Người nhận đổi ca <span className="text-red-500">*</span>
+                </label>
+                <select value={createForm.targetUserId} onChange={e=>setCreateForm(p=>({...p,targetUserId:e.target.value}))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" required disabled={!selectedSchedule}>
+                  <option value="">— Chọn người trực thay —</option>
+                  {selectedSchedule && allUsers
+                    .filter((u:any) => u.id !== selectedSchedule.userId &&
+                      ((u.departmentIds || []).includes(selectedSchedule.departmentId) || u.departmentId === selectedSchedule.departmentId))
+                    .map((u:any) => (
+                      <option key={u.id} value={u.id}>{u.fullName} {u.title?`— ${u.title}`:''}</option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              {createForm.mode === 'form' ? (
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1">
+                    Lý do đổi ca <span className="text-red-500">*</span>
+                  </label>
+                  <textarea value={createForm.reason} onChange={e=>setCreateForm(p=>({...p,reason:e.target.value}))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm" rows={3}
+                    placeholder="VD: Đi công tác, hiếu hỉ gia đình..." required/>
+                </div>
+              ) : (
+                <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-4">
+                  <label className="block text-blue-800 font-semibold mb-2">📎 File đơn PDF đã có chữ ký <span className="text-red-500">*</span></label>
+                  <input type="file" accept="application/pdf" onChange={handleCreatePdfPick}
+                    className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"/>
+                  {createForm.pdfFilename && (
+                    <div className="mt-2 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                      ✓ {createForm.pdfFilename} ({Math.round(createForm.pdfBase64.length / 1024)} KB)
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-500 mt-2">PDF ≤5MB, có đầy đủ chữ ký Người viết đơn / Người đổi ca / Trưởng khoa.</p>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm mt-2" placeholder="Ghi chú thêm (tùy chọn)"
+                    value={createForm.reason} onChange={e=>setCreateForm(p=>({...p,reason:e.target.value}))}/>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-3 border-t">
+                <button type="button" onClick={()=>setShowCreate(false)}
+                  className="flex-1 border py-2 rounded-lg text-sm">Huỷ</button>
+                <button type="submit"
+                  className="flex-1 bg-orange-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-orange-700">
+                  📤 Gửi phiếu
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Print form modal — đơn đề nghị đổi ca trực có chỗ ký */}
       {printSwap && (
