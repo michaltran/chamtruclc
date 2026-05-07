@@ -40,6 +40,8 @@ function formatZodError(err: any): string {
 const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
 // Khoa hồi sức / hồi tỉnh (cho ca THS/CHS/LHS)
 const RECOVERY_DEPT_CODES = new Set(['GMHS']);
+// Khoa Lãnh đạo (TLD/CLD/LLD) — dùng shift type riêng để không conflict với ca khoa chuyên môn
+const LEADERSHIP_DEPT_CODE = 'LANHDAO';
 
 /**
  * Pick shift type smartly based on (date, departmentCode):
@@ -51,11 +53,13 @@ async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, depa
   const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: dateOnly } });
   const isWeekend = [0, 6].includes(date.getDay());
+  const isLeader = departmentCode === LEADERSHIP_DEPT_CODE;
   const isEmerg = !!departmentCode && EMERGENCY_DEPT_CODES.has(departmentCode);
   const isRecov = !!departmentCode && RECOVERY_DEPT_CODES.has(departmentCode);
 
   let code: string = 'T';
-  if (isRecov) code = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
+  if (isLeader) code = isHoliday ? 'LLD' : isWeekend ? 'CLD' : 'TLD';
+  else if (isRecov) code = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
   else if (isEmerg) code = isHoliday ? 'LC' : isWeekend ? 'CC' : 'TC';
   else code = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
 
