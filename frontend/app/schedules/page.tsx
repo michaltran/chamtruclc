@@ -447,12 +447,46 @@ export default function SchedulesPage() {
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
                 <b>Cam kết:</b> Tôi xin cam kết các thông tin trên là đúng sự thật. Đã trao đổi và được sự đồng ý của người trực thay.
-                Yêu cầu chỉ có hiệu lực sau khi <b>Ban Giám đốc / Quản trị viên</b> phê duyệt.
+                Yêu cầu chỉ có hiệu lực sau khi <b>Phòng Kế hoạch - Nghiệp vụ</b> tiếp nhận và <b>Ban Giám đốc</b> phê duyệt.
               </div>
 
-              <div className="flex gap-2 pt-3 border-t">
+              {/* Khu vực ký xác nhận — sẽ được điền sau khi gửi/in */}
+              <div className="border rounded-lg overflow-hidden">
+                <p className="text-[10px] uppercase font-semibold text-gray-600 bg-gray-50 px-3 py-1 border-b">
+                  Phần dành cho cấp xác nhận
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 text-[11px] divide-x divide-y md:divide-y-0">
+                  <div className="p-3 text-center">
+                    <div className="font-semibold uppercase text-gray-700">Người đề nghị</div>
+                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-12"></div>
+                    <div className="text-gray-700">{user?.fullName}</div>
+                  </div>
+                  <div className="p-3 text-center">
+                    <div className="font-semibold uppercase text-gray-700">Trưởng khoa /<br/>ĐD trưởng /<br/>KTV trưởng</div>
+                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-12"></div>
+                  </div>
+                  <div className="p-3 text-center">
+                    <div className="font-semibold uppercase text-gray-700">P. Kế hoạch -<br/>Nghiệp vụ</div>
+                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-12"></div>
+                  </div>
+                  <div className="p-3 text-center">
+                    <div className="font-semibold uppercase text-gray-700">Giám đốc</div>
+                    <div className="italic text-gray-400 text-[10px]">(Ký, ghi rõ họ tên)</div>
+                    <div className="h-12"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t print:hidden">
                 <button type="button" onClick={()=>setShowSwapModal(false)}
                   className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50">Huỷ</button>
+                <button type="button" onClick={()=>window.print()}
+                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+                  🖨️ In đơn
+                </button>
                 <button type="submit"
                   className="flex-1 bg-orange-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-orange-700">
                   📤 Gửi đơn đề nghị
