@@ -5,6 +5,34 @@ import Navbar from '@/components/Navbar'
 import { scheduleApi, departmentApi, userApi } from '@/lib/api'
 import { getDaysInMonth } from 'date-fns'
 
+// Map mã khoa con → tên khoa cha hiển thị trong chấm trực
+// (Ở lịch trực vẫn giữ chi tiết các sub-position; ở chấm trực gộp về khoa cha)
+const PARENT_GROUP: Record<string, string> = {
+  'LANHDAO':  'Lãnh đạo',
+  'CC-HSTC':  'Khoa Cấp cứu - Hồi sức Tích cực',
+  'CC-NGOAI': 'Khoa Ngoại',
+  'NGOAI':    'Khoa Ngoại',
+  'GMHS':     'Khoa Gây mê hồi sức',
+  'CC-SAN':   'Khoa Phụ Sản',
+  'SAN':      'Khoa Phụ Sản',
+  'NOI':      'Khoa Nội',
+  'NHI':      'Khoa Nhi',
+  'YHCT':     'Khoa YHCT – PHCN',
+  'LCK':      'Khoa Liên Chuyên khoa',
+  'SAM':      'Khoa Chẩn đoán hình ảnh',
+  'CT':       'Khoa Chẩn đoán hình ảnh',
+  'XQUANG':   'Khoa Chẩn đoán hình ảnh',
+  'XN':       'Khoa Xét nghiệm',
+  'VP':       'Phòng Viện phí',
+  'LX':       'Lái xe',
+  'HL-CC':    'Hộ lý',
+  'HL':       'Hộ lý',
+}
+const PARENT_ORDER = [
+  'Lãnh đạo','Khoa Cấp cứu - Hồi sức Tích cực','Khoa Ngoại','Khoa Gây mê hồi sức',
+  'Khoa Phụ Sản','Khoa Nội','Khoa Nhi','Khoa YHCT – PHCN','Khoa Liên Chuyên khoa',
+  'Khoa Chẩn đoán hình ảnh','Khoa Xét nghiệm','Phòng Viện phí','Lái xe','Hộ lý',
+]
 const DEPT_ORDER = [
   'CC-HSTC','HL-CC','CC-NGOAI','NGOAI','GMHS','CC-SAN','SAN','NOI','NHI','YHCT','LCK','SAM','CT','XQUANG','XN','VP','LX','HL'
 ]
@@ -184,18 +212,51 @@ export default function ChamTrucPage() {
 
         {loading ? (
           <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"/></div>
-        ) : (
+        ) : (() => {
+          // Build parent-group → { name, deptIds[], users[] }
+          const groups: Record<string, { name: string; deptIds: string[]; users: any[] }> = {}
+          PARENT_ORDER.forEach(g => { groups[g] = { name: g, deptIds: [], users: [] } })
+          // Map each department (sub-position) to parent group
+          const allDepts = filterDept ? departments.filter(d => d.id === filterDept) : departments
+          allDepts.forEach(d => {
+            const parent = PARENT_GROUP[d.code] || d.name
+            if (!groups[parent]) groups[parent] = { name: parent, deptIds: [], users: [] }
+            groups[parent].deptIds.push(d.id)
+          })
+          // Assign each user to a parent group based on their primary dept (or any dept they have schedule in)
+          const userToParent: Record<string, string> = {}
+          allUsers.forEach(u => {
+            // Lấy department code chính
+            const primaryDept = (u.departments || []).find((d:any) => d.isPrimary) || (u.departments || [])[0]
+            const code = primaryDept?.code || allDepts.find(d => d.id === u.departmentId)?.code
+            if (code && PARENT_GROUP[code]) userToParent[u.id] = PARENT_GROUP[code]
+          })
+          // Người có ca trực ở khoa nào → thuộc parent group đó
+          schedules.forEach(s => {
+            if (userToParent[s.userId]) return
+            const code = allDepts.find(d => d.id === s.departmentId)?.code
+            if (code && PARENT_GROUP[code]) userToParent[s.userId] = PARENT_GROUP[code]
+          })
+          allUsers.forEach(u => {
+            const parent = userToParent[u.id]
+            if (parent && groups[parent]) groups[parent].users.push(u)
+          })
+          // Sort users in each group: BS trước, ĐD sau
+          Object.values(groups).forEach(g => {
+            g.users.sort((a, b) => {
+              const ra = titleRank(a.title), rb = titleRank(b.title)
+              if (ra !== rb) return ra - rb
+              return (a.fullName||'').localeCompare(b.fullName||'')
+            })
+          })
+          const orderedGroups = PARENT_ORDER.map(name => groups[name]).filter(g => g && g.users.length > 0)
+
+          return (<>
           <div className="space-y-6 print:space-y-3">
-            {displayDepts.map(dept => {
-              const dutyUserIds = dutyByDept[dept.id] || new Set()
-              const allDeptUsers = allUsers
-                .filter(u => u.departmentId === dept.id || dutyUserIds.has(u.id))
-                .sort((a, b) => {
-                  const ra = titleRank(a.title), rb = titleRank(b.title)
-                  if (ra !== rb) return ra - rb
-                  return (a.fullName||'').localeCompare(b.fullName||'')
-                })
+            {orderedGroups.map(group => {
+              const allDeptUsers = group.users
               if (allDeptUsers.length === 0) return null
+              const dept = { id: group.deptIds.join(','), name: group.name, code: group.name }
 
               return (
                 <div key={dept.id} className="bg-white rounded-xl shadow-sm overflow-hidden print:rounded-none print:shadow-none print:break-inside-avoid">
@@ -331,8 +392,73 @@ export default function ChamTrucPage() {
                 <p>Chưa có dữ liệu chấm trực tháng {month}/{year}</p>
               </div>
             )}
+
+            {/* TỔNG CỘNG TOÀN VIỆN — grand total cho 1 ngày trên toàn bộ khoa phòng */}
+            {schedules.length > 0 && (() => {
+              const dayTotalsAll: Record<number, number> = {}
+              const codeTotalsAll: Record<string, number> = { TC:0,T:0,THS:0,CC:0,C:0,CHS:0,LC:0,L:0,LHS:0 }
+              schedules.forEach(s => {
+                const d = new Date(s.shiftDate).getDate()
+                dayTotalsAll[d] = (dayTotalsAll[d] || 0) + 1
+                const code = s.shiftType?.code || 'T'
+                if (codeTotalsAll[code] !== undefined) codeTotalsAll[code]++
+              })
+              const ccA = codeTotalsAll.TC + codeTotalsAll.CC + codeTotalsAll.LC
+              const noA = codeTotalsAll.T + codeTotalsAll.C + codeTotalsAll.L
+              const hsA = codeTotalsAll.THS + codeTotalsAll.CHS + codeTotalsAll.LHS
+              const allA = ccA + noA + hsA
+              return (
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden border-2 border-amber-400">
+                  <div className="bg-amber-500 text-white px-4 py-2">
+                    <h2 className="font-bold text-sm uppercase tracking-wide">TỔNG CỘNG TOÀN VIỆN — Tháng {month}/{year}</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-amber-50">
+                          <th colSpan={2} className="border px-2 py-1 text-left font-bold text-amber-900 min-w-[210px]">Số phiên trực mỗi ngày</th>
+                          {dayLabels.map(({d, dow, isWeekend}) => (
+                            <th key={d} className={`border px-1 py-1 text-center w-9 ${isWeekend ? 'bg-orange-100 text-orange-700' : 'text-amber-800'}`}>
+                              <div className="text-[10px]">{d}</div>
+                              <div className="text-[8px] opacity-70">{dow}</div>
+                            </th>
+                          ))}
+                          {COUNT_COLS.map(c => (
+                            <th key={c} className={`border px-1 py-1 text-center w-9 text-[10px] font-bold ${SHIFT_CODE_COLORS[c]}`}>{c}</th>
+                          ))}
+                          <th className="border px-1 py-1 text-center font-bold text-red-700 bg-red-50">TC ngày CC</th>
+                          <th className="border px-1 py-1 text-center font-bold text-blue-700 bg-blue-50">TC ngày thường</th>
+                          <th className="border px-1 py-1 text-center font-bold text-indigo-700 bg-indigo-50">TC trực Hồi sức</th>
+                          <th className="border px-1 py-1 text-center font-bold text-amber-900 bg-amber-100">Tổng cộng</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="font-bold">
+                          <td colSpan={2} className="border px-2 py-2 text-right text-amber-900 bg-amber-50">Toàn viện</td>
+                          {dayLabels.map(({d}) => (
+                            <td key={d} className="border px-0.5 py-2 text-center text-gray-800 text-[11px]">
+                              {dayTotalsAll[d] || ''}
+                            </td>
+                          ))}
+                          {COUNT_COLS.map(c => (
+                            <td key={c} className="border px-1 py-2 text-center text-gray-800 text-[11px]">
+                              {codeTotalsAll[c] || ''}
+                            </td>
+                          ))}
+                          <td className="border px-1 py-2 text-center bg-red-100 text-red-800">{ccA || ''}</td>
+                          <td className="border px-1 py-2 text-center bg-blue-100 text-blue-800">{noA || ''}</td>
+                          <td className="border px-1 py-2 text-center bg-indigo-100 text-indigo-800">{hsA || ''}</td>
+                          <td className="border px-1 py-2 text-center bg-amber-200 text-amber-900 text-base">{allA || ''}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
-        )}
+          </>)
+        })()}
 
         {/* Legend - 9 ký hiệu chấm trực */}
         <div className="bg-white rounded-xl shadow-sm p-4 mt-4 print:hidden">

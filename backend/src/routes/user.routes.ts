@@ -158,6 +158,28 @@ async function syncUserDepartments(userId: string, deptIds: string[], primaryId?
   await prisma.user.update({ where: { id: userId }, data: { departmentId: primary } });
 }
 
+/** Title nào tự động được gắn vào khoa LÃNH ĐẠO */
+function isLeadershipTitle(title?: string | null): boolean {
+  if (!title) return false;
+  return /tr[ưu]ởng\s*khoa|ph[óo]\s*tr[ưu]ởng\s*khoa|ph[óo]\s*khoa|gi[áa]m\s*đ[ốo]c|ph[óo]\s*gi[áa]m\s*đ[ốo]c/i.test(title);
+}
+
+/** Auto-add LANHDAO membership when user is given leadership title. */
+async function ensureLanhDaoMembership(userId: string, title?: string | null) {
+  if (!isLeadershipTitle(title)) return;
+  const lanhDaoDept = await prisma.department.findFirst({ where: { code: 'LANHDAO' } });
+  if (!lanhDaoDept) return;
+  // Đã có chưa?
+  const exists = await prisma.userDepartment.findUnique({
+    where: { userId_departmentId: { userId, departmentId: lanhDaoDept.id } },
+  });
+  if (!exists) {
+    await prisma.userDepartment.create({
+      data: { userId, departmentId: lanhDaoDept.id, isPrimary: false },
+    });
+  }
+}
+
 /**
  * POST /api/users (admin only)
  */
@@ -191,6 +213,8 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
       data: { ...rest, passwordHash, departmentId: allDepts[0] },
     });
     if (allDepts.length > 0) await syncUserDepartments(user.id, allDepts);
+    // Auto-add LANHDAO nếu title là Trưởng/Phó
+    await ensureLanhDaoMembership(user.id, rest.title);
     const { passwordHash: _, ...safeUser } = user;
     res.status(201).json(safeUser);
   } catch (err: any) {
@@ -233,6 +257,8 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
     } else if (departmentId !== undefined) {
       await syncUserDepartments(id, [departmentId]);
     }
+    // Auto-add LANHDAO khi title được set thành Trưởng/Phó khoa
+    await ensureLanhDaoMembership(id, rest.title ?? updated.title);
     const { passwordHash: _, ...safeUser } = updated;
     res.json(safeUser);
   } catch (err: any) {
