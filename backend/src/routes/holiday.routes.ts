@@ -11,6 +11,56 @@ const EMERGENCY_DEPT_CODES = new Set(['CC-HSTC','HL-CC','CC-NGOAI','CC-SAN']);
 const RECOVERY_DEPT_CODES  = new Set(['GMHS']);
 
 /**
+ * Re-apply shift_type cho mọi schedules vào 1 ngày cụ thể.
+ * Tính toán mã ca đúng dựa trên: ngày lễ hay không + dept code.
+ * Trả về số ca đã cập nhật.
+ */
+async function reapplyForDate(targetDate: Date): Promise<number> {
+  // Tạo range full ngày
+  const dStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+  const dEnd   = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+
+  const isHoliday = !!(await prisma.holiday.findUnique({ where: { holidayDate: dStart } }));
+  const isWeekend = [0, 6].includes(dStart.getDay());
+
+  // Cache shift_types
+  const shiftTypes = await prisma.shiftType.findMany();
+  const stByCode: Record<string, string> = {};
+  shiftTypes.forEach(st => { stByCode[st.code] = st.id; });
+
+  const schedules = await prisma.schedule.findMany({
+    where: { shiftDate: { gte: dStart, lte: dEnd } },
+    include: { department: { select: { code: true } } },
+  });
+
+  let updated = 0;
+  for (const s of schedules) {
+    const code = s.department.code;
+    const isEmerg = EMERGENCY_DEPT_CODES.has(code);
+    const isRecov = RECOVERY_DEPT_CODES.has(code);
+
+    let target: string;
+    if (isRecov) target = isHoliday ? 'LHS' : isWeekend ? 'CHS' : 'THS';
+    else if (isEmerg) target = isHoliday ? 'LC' : isWeekend ? 'CC' : 'TC';
+    else target = isHoliday ? 'L' : isWeekend ? 'C' : 'T';
+
+    const newStId = stByCode[target];
+    if (newStId && newStId !== s.shiftTypeId) {
+      try {
+        await prisma.schedule.update({
+          where: { id: s.id },
+          data: { shiftTypeId: newStId },
+        });
+        updated++;
+      } catch {
+        // skip nếu vi phạm unique constraint
+      }
+    }
+  }
+  return updated;
+}
+
+/**
  * GET /api/holidays?year=2026
  * List ngày lễ — public (đã authenticate). Filter theo năm nếu có.
  */
@@ -51,7 +101,9 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         isPaid: parsed.data.isPaid ?? true,
       },
     });
-    res.status(201).json(h);
+    // Auto re-apply mã ca cho các schedules ở ngày này (T/C → L/LC/LHS)
+    const updated = await reapplyForDate(new Date(parsed.data.holidayDate));
+    res.status(201).json({ ...h, autoUpdated: updated });
   } catch (err: any) {
     if (err.code === 'P2002') {
       return res.status(409).json({ error: 'Ngày lễ này đã tồn tại' });
@@ -78,11 +130,19 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
   if (parsed.data.isPaid !== undefined) data.isPaid = parsed.data.isPaid;
 
   try {
+    // Lấy ngày cũ TRƯỚC khi update (để reapply ngày cũ nếu ngày bị đổi)
+    const old = await prisma.holiday.findUnique({ where: { id: req.params.id as string } });
     const h = await prisma.holiday.update({
       where: { id: req.params.id as string },
       data,
     });
-    res.json(h);
+    // Reapply ngày mới (chuyển → L) và ngày cũ nếu khác (chuyển → T/C lại)
+    let updated = 0;
+    updated += await reapplyForDate(new Date(h.holidayDate));
+    if (old && new Date(old.holidayDate).getTime() !== new Date(h.holidayDate).getTime()) {
+      updated += await reapplyForDate(new Date(old.holidayDate));
+    }
+    res.json({ ...h, autoUpdated: updated });
   } catch (err: any) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Không tìm thấy' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Ngày lễ này đã tồn tại' });
@@ -94,8 +154,12 @@ router.patch('/:id', authenticate, authorize('admin'), async (req, res) => {
  * DELETE /api/holidays/:id — admin
  */
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+  // Lấy ngày trước khi xoá để reapply (chuyển L → T/C)
+  const h = await prisma.holiday.findUnique({ where: { id: req.params.id as string } });
   await prisma.holiday.delete({ where: { id: req.params.id as string } });
-  res.json({ success: true });
+  let updated = 0;
+  if (h) updated = await reapplyForDate(new Date(h.holidayDate));
+  res.json({ success: true, autoUpdated: updated });
 });
 
 /**

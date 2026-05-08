@@ -392,25 +392,26 @@ export default function SchedulesPage() {
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await holidayApi.create(newHoliday)
+      const r = await holidayApi.create(newHoliday)
       const list = await holidayApi.list(year)
       setHolidays(list)
       setNewHoliday({ holidayDate: `${year}-${String(month).padStart(2,'0')}-01`, name: '', isPaid: true })
+      // Tự refresh lịch trực để cập nhật mã ca (T/C → L)
+      load()
+      if (r?.autoUpdated > 0) {
+        alert(`Đã thêm ngày lễ. Hệ thống tự động cập nhật ${r.autoUpdated} ca trực sang mã L/LC/LHS.`)
+      }
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
   }
   const handleDeleteHoliday = async (id: string, name: string) => {
-    if (!confirm(`Xoá ngày lễ "${name}"?`)) return
+    if (!confirm(`Xoá ngày lễ "${name}"? Các ca trực ngày này sẽ tự chuyển về T/C.`)) return
     try {
-      await holidayApi.delete(id)
+      const r = await holidayApi.delete(id)
       setHolidays(holidays.filter(h => h.id !== id))
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
-  }
-  const handleReapplyHolidays = async () => {
-    if (!confirm(`Áp dụng lại mã ca cho lịch tháng ${month}/${year}?\n(L thay T/C ở các ngày lễ; LC thay TC/CC; LHS thay THS/CHS)`)) return
-    try {
-      const r = await holidayApi.reapply(year, month)
-      alert(`Đã cập nhật ${r.updated}/${r.total} ca trực`)
       load()
+      if (r?.autoUpdated > 0) {
+        alert(`Đã xoá ngày lễ. Hệ thống tự cập nhật ${r.autoUpdated} ca trực về mã T/C/TC/CC/...`)
+      }
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
   }
 
@@ -794,9 +795,9 @@ export default function SchedulesPage() {
 
             <div className="px-5 py-3 overflow-y-auto flex-1">
               <p className="text-xs text-gray-500 mb-3 italic">
-                Thêm các ngày nghỉ lễ. Sau khi thêm xong → bấm <b>"Áp dụng lại tháng này"</b> để
-                cập nhật mã ca cho lịch tháng {month}/{year}: ngày lễ sẽ chuyển từ T/C → <b>L</b>
-                (cấp cứu → <b>LC</b>, hồi sức → <b>LHS</b>).
+                Thêm các ngày nghỉ lễ. Hệ thống <b>tự động cập nhật mã ca</b> cho mọi lịch trực
+                vào ngày đó: T/C → <b>L</b>, TC/CC → <b>LC</b>, THS/CHS → <b>LHS</b>.
+                Khi xoá ngày lễ, mã ca cũng tự về T/C tương ứng.
               </p>
 
               <form onSubmit={handleAddHoliday} className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-3 p-3 bg-rose-50 rounded-lg border border-rose-200">
@@ -848,12 +849,8 @@ export default function SchedulesPage() {
 
             <div className="flex gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-2xl">
               <button onClick={()=>setShowHolidayModal(false)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-100">
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-700">
                 Đóng
-              </button>
-              <button onClick={handleReapplyHolidays}
-                className="flex-1 bg-amber-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-amber-700">
-                ⚡ Áp dụng lại tháng {month}/{year}
               </button>
             </div>
           </div>
