@@ -24,13 +24,27 @@ const SHIFT_CODE_COLORS: Record<string, string> = {
   LHS: 'bg-pink-100 text-pink-800 border-pink-300',
 }
 
-// Title được tính là Bác sĩ (cột BS): bao gồm cả Trưởng khoa, Phó khoa, Giám đốc
+// Title được tính là Bác sĩ (cột BS): bao gồm cả Trưởng khoa, Phó khoa, Giám đốc, Lãnh đạo
 const isDoctorTitle = (title?: string) => {
   if (!title) return false
   const t = title.toLowerCase()
   return t.includes('bác sĩ') || t.includes('lãnh đạo')
     || /tr[ưu]ởng\s*khoa|ph[óo]\s*tr[ưu]ởng\s*khoa|ph[óo]\s*khoa|gi[áa]m\s*đ[ốo]c/.test(t)
 }
+// Title được tính là ĐD/HS/KTV/HL (cột ĐD)
+const isNurseTitle = (title?: string) => {
+  if (!title) return false
+  const t = title.toLowerCase()
+  return /điều dưỡng|hộ sinh|hộ lý|kỹ thuật|kt\.|đd\.|y sĩ|y tá/i.test(t)
+}
+
+// Khoa chỉ có 1 loại nhân sự — render cell merge (colSpan=2):
+//  - Chỉ BS: CT, Siêu âm
+//  - Chỉ ĐD/HS/KTV: Xquang, Liên chuyên khoa, YHCT
+//  - Cả 2 gộp 1 người (1 ô): Hộ lý, Hộ lý cấp cứu, Lái xe, Viện phí
+const DEPT_BS_ONLY = new Set(['CT', 'SAM'])
+const DEPT_DD_ONLY = new Set(['XQUANG', 'LCK', 'YHCT'])
+const DEPT_MERGED  = new Set(['HL', 'HL-CC', 'LX', 'VP'])
 
 export default function SchedulesPage() {
   const router = useRouter()
@@ -44,7 +58,7 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedCell, setSelectedCell] = useState<{deptId:string, date:string}|null>(null)
-  const [form, setForm] = useState({ userId:'', departmentId:'', shiftTypeId:'', shiftDate:'', note:'' })
+  const [form, setForm] = useState<{ userId:string; departmentId:string; shiftTypeId:string; shiftDate:string; note:string; colType:'BS'|'DD'|'ALL' }>({ userId:'', departmentId:'', shiftTypeId:'', shiftDate:'', note:'', colType:'ALL' })
   const [viewMode, setViewMode] = useState<'week'|'month'>('week')
   const [lockedDepts, setLockedDepts] = useState<Set<string>>(new Set())
   const [showSwapModal, setShowSwapModal] = useState(false)
@@ -120,7 +134,12 @@ export default function SchedulesPage() {
   // Loại admin (quản lý) — admin không trực nên không hiện trong dropdown chọn người trực.
   // Cho phép user thuộc sub-dept (SAM) trực ở sub-dept khác cùng cha (CT/XQUANG).
   const filteredUsersForForm = useMemo(() => {
-    const eligible = users.filter((u: any) => u.role !== 'admin')
+    let eligible = users.filter((u: any) => u.role !== 'admin')
+
+    // Filter theo loại cột: BS chỉ hiện bác sĩ/lãnh đạo; ĐD chỉ hiện điều dưỡng/hộ sinh/KTV/HL
+    if (form.colType === 'BS') eligible = eligible.filter((u: any) => isDoctorTitle(u.title))
+    else if (form.colType === 'DD') eligible = eligible.filter((u: any) => isNurseTitle(u.title))
+
     if (!form.departmentId) return eligible
     const formCode = departments.find(d => d.id === form.departmentId)?.code
     const formFamily = getFamilyCode(formCode)
@@ -137,7 +156,7 @@ export default function SchedulesPage() {
         .map(c => getFamilyCode(c as string)))
       return formFamily ? userFamilies.has(formFamily) : false
     })
-  }, [users, form.departmentId, departments])
+  }, [users, form.departmentId, form.colType, departments])
 
   // Khoa được phép cho dept_lead — null nếu admin/staff hoặc dept_lead chưa được gán khoa.
   // Nếu user.role là department_lead nhưng không có khoa nào → null (cho thấy tất cả khoa, backend cũng có check)
@@ -182,9 +201,9 @@ export default function SchedulesPage() {
     return m
   }, [schedules])
 
-  const openAddForm = (deptId: string, date: string) => {
+  const openAddForm = (deptId: string, date: string, colType: 'BS'|'DD'|'ALL' = 'ALL') => {
     setSelectedCell({deptId, date})
-    setForm({userId:'', departmentId:deptId, shiftTypeId:'', shiftDate:date, note:''})
+    setForm({userId:'', departmentId:deptId, shiftTypeId:'', shiftDate:date, note:'', colType})
     setShowForm(true)
   }
 
@@ -457,7 +476,7 @@ export default function SchedulesPage() {
                     {exporting ? '⏳ Đang xuất...' : '📄 Xuất PDF'}
                   </button>
                 )}
-                <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:''});setShowForm(true)}}
+                <button onClick={()=>{setSelectedCell(null);setForm({userId:'',departmentId:isDeptLead && allowedDeptIds ? Array.from(allowedDeptIds)[0] || '' : '',shiftTypeId:'',shiftDate:'',note:'',colType:'ALL'});setShowForm(true)}}
                   className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-base font-semibold hover:bg-blue-700 shadow-sm">
                   + Thêm ca trực
                 </button>
@@ -555,8 +574,8 @@ export default function SchedulesPage() {
                           const inMonth = d.getMonth() === month-1 && d.getFullYear() === year
                           const isWeekend = [0,6].includes(d.getDay())
                           const cell = schedMap[dateStr]?.[dept.id] || { bs: [], dd: [] }
-                          const renderCell = (items: any[], type: 'BS'|'DD') => (
-                            <td key={`${dateStr}-${dept.id}-${type}`}
+                          const renderCell = (items: any[], type: 'BS'|'DD'|'ALL', colSpan = 1) => (
+                            <td key={`${dateStr}-${dept.id}-${type}`} colSpan={colSpan}
                               className={`align-top border border-gray-300 px-1.5 py-1.5 ${!inMonth?'bg-gray-100 opacity-30':''} ${isWeekend?'bg-orange-50/40':''}`}>
                               <div className="space-y-1 min-h-[60px]">
                                 {items.map(s=>{
@@ -588,7 +607,7 @@ export default function SchedulesPage() {
                                   )
                                 })}
                                 {canEdit && inMonth && (
-                                  <button onClick={()=>openAddForm(dept.id, dateStr)}
+                                  <button onClick={()=>openAddForm(dept.id, dateStr, type === 'ALL' ? 'ALL' : type)}
                                     className="w-full text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded text-center leading-none opacity-0 group-hover:opacity-100 hover:opacity-100 transition-all text-lg py-0.5">
                                     +
                                   </button>
@@ -596,6 +615,13 @@ export default function SchedulesPage() {
                               </div>
                             </td>
                           )
+                          // Khoa chỉ 1 loại nhân sự / merge — colSpan 2, dùng chung 1 cột
+                          if (DEPT_MERGED.has(dept.code) || DEPT_BS_ONLY.has(dept.code) || DEPT_DD_ONLY.has(dept.code)) {
+                            const all = [...cell.bs, ...cell.dd]
+                            const ct: 'BS'|'DD'|'ALL' = DEPT_BS_ONLY.has(dept.code) ? 'BS'
+                              : DEPT_DD_ONLY.has(dept.code) ? 'DD' : 'ALL'
+                            return [renderCell(all, ct, 2)]
+                          }
                           // LÃNH ĐẠO: 1 ô colSpan 2, không tách BS/ĐD
                           if (isLanhDao) {
                             const all = [...cell.bs, ...cell.dd]
@@ -632,7 +658,7 @@ export default function SchedulesPage() {
                               </td>
                             )]
                           }
-                          return [renderCell(cell.bs, 'BS'), renderCell(cell.dd, 'DD')]
+                          return [renderCell(cell.bs, 'BS', 1), renderCell(cell.dd, 'DD', 1)]
                         })}
                       </tr>
                     )
@@ -882,15 +908,25 @@ export default function SchedulesPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-bold mb-4">Thêm ca trực</h2>
+            <h2 className="text-lg font-bold mb-1">Thêm ca trực</h2>
+            {form.colType !== 'ALL' && (
+              <div className="mb-3 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold border"
+                style={form.colType === 'BS' ? {background:'#DBEAFE', color:'#1E40AF', borderColor:'#93C5FD'} : {background:'#D1FAE5', color:'#065F46', borderColor:'#6EE7B7'}}>
+                Loại cột: {form.colType === 'BS' ? 'Bác sĩ' : 'ĐD/HS/KTV'}
+              </div>
+            )}
             <form onSubmit={handleCreate} className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-gray-700">Nhân viên</label>
+                <label className="text-sm font-medium text-gray-700">
+                  Nhân viên
+                  {form.colType === 'BS' && <span className="text-blue-600 ml-1 text-xs">(chỉ Bác sĩ/Lãnh đạo)</span>}
+                  {form.colType === 'DD' && <span className="text-emerald-600 ml-1 text-xs">(chỉ ĐD/HS/KTV/Hộ lý)</span>}
+                </label>
                 <select value={form.userId} onChange={e=>setForm({...form,userId:e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required>
                   <option value="">Chọn nhân viên</option>
                   {filteredUsersForForm.length === 0 && form.departmentId && (
-                    <option value="" disabled>Khoa này chưa có nhân viên</option>
+                    <option value="" disabled>Không có nhân viên phù hợp</option>
                   )}
                   {filteredUsersForForm.map(u=><option key={u.id} value={u.id}>{u.fullName} {u.title?`(${u.title})`:''}</option>)}
                 </select>

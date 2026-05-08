@@ -518,38 +518,8 @@ export default function ChamTrucPage() {
         cur++
       })
 
-      // === Group totals row ===
-      const dayTotals: Record<number, number> = {}
-      Object.values(groupAttend).forEach(map => {
-        Object.keys(map).forEach(d => { dayTotals[+d] = (dayTotals[+d] || 0) + 1 })
-      })
-      const codeTotals: Record<string, number> = {}
-      ;['TC','T','THS','CC','C','CHS','LC','L','LHS'].forEach(k => { codeTotals[k] = 0 })
-      Object.values(groupCounts).forEach(c => {
-        Object.keys(codeTotals).forEach(k => { codeTotals[k] += c[k] || 0 })
-      })
-      const totalRow = ws.getRow(cur)
-      const ccTot = codeTotals.TC + codeTotals.CC + codeTotals.LC
-      const noTot = codeTotals.T + codeTotals.C + codeTotals.L
-      const hsTot = codeTotals.THS + codeTotals.CHS + codeTotals.LHS
-      totalRow.values = [
-        '', 'TỔNG CỘNG', '',
-        ...dayLabels.map(({ d }) => dayTotals[d] || ''),
-        codeTotals.TC || '', codeTotals.T || '', codeTotals.THS || '',
-        codeTotals.CC || '', codeTotals.C || '', codeTotals.CHS || '',
-        codeTotals.LC || '', codeTotals.L || '', codeTotals.LHS || '',
-        ccTot || '', noTot || '', hsTot || '', (ccTot + noTot + hsTot) || '',
-      ]
-      ws.mergeCells(cur, 2, cur, 3)
-      totalRow.eachCell((cell: any) => {
-        cell.border = border
-        cell.font = { bold: true, size: 11 }
-        cell.fill = isLd ? fill('FFFEF3C7') : fill('FFE5E7EB')
-        cell.alignment = { horizontal: 'center', vertical: 'middle' }
-      })
-      ws.getCell(cur, 2).alignment = { horizontal: 'center', vertical: 'middle' }
-      cur++
-      cur++ // separator
+      // (Đã bỏ row "TỔNG CỘNG" theo yêu cầu — chỉ giữ data thuần)
+      cur++ // separator giữa các nhóm
     })
 
     // Save
