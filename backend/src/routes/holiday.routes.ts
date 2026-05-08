@@ -16,12 +16,19 @@ const RECOVERY_DEPT_CODES  = new Set(['GMHS']);
  * Trả về số ca đã cập nhật.
  */
 async function reapplyForDate(targetDate: Date): Promise<number> {
-  // Tạo range full ngày
-  const dStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-  const dEnd   = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+  // Quan trọng: PG @db.Date lưu UTC midnight, nên phải dùng UTC components
+  // (tránh lệch ngày trong TZ Vietnam UTC+7).
+  const y = targetDate.getUTCFullYear();
+  const m = targetDate.getUTCMonth();
+  const d = targetDate.getUTCDate();
+  const dStart = new Date(Date.UTC(y, m, d));
+  const dEnd   = new Date(Date.UTC(y, m, d, 23, 59, 59));
 
-  const isHoliday = !!(await prisma.holiday.findUnique({ where: { holidayDate: dStart } }));
-  const isWeekend = [0, 6].includes(dStart.getDay());
+  // Tìm holiday bằng range query (không dùng findUnique để tránh lệch giờ)
+  const isHoliday = !!(await prisma.holiday.findFirst({
+    where: { holidayDate: { gte: dStart, lte: dEnd } },
+  }));
+  const isWeekend = [0, 6].includes(dStart.getUTCDay());
 
   // Cache shift_types
   const shiftTypes = await prisma.shiftType.findMany();
@@ -178,21 +185,22 @@ router.post('/reapply', authenticate, authorize('admin'), async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors });
   const { year, month } = parsed.data;
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
+  // Dùng UTC để khớp PG @db.Date (lưu UTC midnight)
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59));
 
   // Cache shift_type by code
   const shiftTypes = await prisma.shiftType.findMany();
   const stByCode: Record<string, string> = {};
   shiftTypes.forEach(st => { stByCode[st.code] = st.id; });
 
-  // Cache holiday dates trong tháng
+  // Cache holiday dates trong tháng (key Y-M-D theo UTC)
   const holidaysList = await prisma.holiday.findMany({
     where: { holidayDate: { gte: startDate, lte: endDate } },
   });
   const holidaySet = new Set(holidaysList.map(h => {
     const d = new Date(h.holidayDate);
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
   }));
 
   // Lấy tất cả schedules + dept code
@@ -204,8 +212,8 @@ router.post('/reapply', authenticate, authorize('admin'), async (req, res) => {
   let updated = 0;
   for (const s of schedules) {
     const d = new Date(s.shiftDate);
-    const isHoliday = holidaySet.has(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
-    const isWeekend = [0, 6].includes(d.getDay());
+    const isHoliday = holidaySet.has(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
+    const isWeekend = [0, 6].includes(d.getUTCDay());
     const code = s.department.code;
     const isEmerg = EMERGENCY_DEPT_CODES.has(code);
     const isRecov = RECOVERY_DEPT_CODES.has(code);
