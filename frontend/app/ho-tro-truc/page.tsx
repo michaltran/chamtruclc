@@ -332,7 +332,10 @@ export default function HoTroTrucPage() {
       const CONTENT_W = PAGE_W - 2 * MARGIN
       const CONTENT_H = PAGE_H - 2 * MARGIN
 
-      // Capture each section separately
+      // Capture each section separately — set font Times New Roman trên export area
+      const prevFont = node.style.fontFamily
+      node.style.fontFamily = '"Times New Roman", Times, serif'
+
       const sections = node.querySelectorAll('.htt-section')
       let pageIdx = 0
       for (const sec of Array.from(sections)) {
@@ -356,6 +359,8 @@ export default function HoTroTrucPage() {
           offsetX, offsetY, drawW, drawH, undefined, 'FAST')
       }
 
+      // Khôi phục font
+      node.style.fontFamily = prevFont
       pdf.save(`ho-tro-truc-${month}-${year}.pdf`)
     } catch (err: any) {
       console.error('[PDF export]', err)

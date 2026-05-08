@@ -118,3 +118,14 @@ export const departmentApi = {
   update: (id: string, data: any) =>
     api.patch(`/departments/${id}`, data).then((r) => r.data),
 };
+
+export const holidayApi = {
+  list: (year?: number) => api.get('/holidays', { params: { year } }).then(r => r.data),
+  create: (data: { holidayDate: string; name: string; isPaid?: boolean }) =>
+    api.post('/holidays', data).then(r => r.data),
+  update: (id: string, data: any) =>
+    api.patch(`/holidays/${id}`, data).then(r => r.data),
+  delete: (id: string) => api.delete(`/holidays/${id}`).then(r => r.data),
+  reapply: (year: number, month: number) =>
+    api.post('/holidays/reapply', { year, month }).then(r => r.data),
+};
