@@ -522,6 +522,13 @@ export default function ChamTrucPage() {
       cur++ // separator giữa các nhóm
     })
 
+    // Apply Times New Roman cho mọi cell đã set font
+    ws.eachRow((row: any) => {
+      row.eachCell((cell: any) => {
+        cell.font = { ...(cell.font || {}), name: 'Times New Roman' }
+      })
+    })
+
     // Save
     try {
       const buf = await wb.xlsx.writeBuffer()

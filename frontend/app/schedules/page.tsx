@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import { scheduleApi, userApi, departmentApi, scheduleExtraApi, swapApi } from '@/lib/api'
+import { scheduleApi, userApi, departmentApi, scheduleExtraApi, swapApi, holidayApi } from '@/lib/api'
 import { format, startOfWeek, addDays, addWeeks, getDaysInMonth } from 'date-fns'
 import { vi } from 'date-fns/locale'
 
@@ -61,6 +61,9 @@ export default function SchedulesPage() {
   const [form, setForm] = useState<{ userId:string; departmentId:string; shiftTypeId:string; shiftDate:string; note:string; colType:'BS'|'DD'|'ALL' }>({ userId:'', departmentId:'', shiftTypeId:'', shiftDate:'', note:'', colType:'ALL' })
   const [viewMode, setViewMode] = useState<'week'|'month'>('week')
   const [lockedDepts, setLockedDepts] = useState<Set<string>>(new Set())
+  const [showHolidayModal, setShowHolidayModal] = useState(false)
+  const [holidays, setHolidays] = useState<any[]>([])
+  const [newHoliday, setNewHoliday] = useState({ holidayDate: '', name: '', isPaid: true })
   const [showSwapModal, setShowSwapModal] = useState(false)
   const [swapTarget, setSwapTarget] = useState<any>(null)
   const [swapForm, setSwapForm] = useState({ targetUserId:'', reason:'', pdfBase64:'', pdfFilename:'' })
@@ -300,6 +303,10 @@ export default function SchedulesPage() {
         const node = document.getElementById('schedule-export-area')
         if (!node) continue
 
+        // Tạm set font Times New Roman cho khu vực được capture
+        const prevFont = node.style.fontFamily
+        node.style.fontFamily = '"Times New Roman", Times, serif'
+
         const canvas = await html2canvas(node, {
           scale: 2,
           backgroundColor: '#ffffff',
@@ -307,6 +314,8 @@ export default function SchedulesPage() {
           windowHeight: node.scrollHeight,
           ignoreElements: (el) => el.classList?.contains('no-export'),
         })
+        // Khôi phục font
+        node.style.fontFamily = prevFont
 
         if (pageAdded > 0) pdf.addPage()
         pageAdded++
@@ -330,8 +339,8 @@ export default function SchedulesPage() {
           'FAST',
         )
 
-        // Footer page number
-        pdf.setFontSize(8).setTextColor(120)
+        // Footer page number — Times font
+        pdf.setFont('times', 'normal').setFontSize(9).setTextColor(120)
         pdf.text(
           `Tuần ${w + 1}/${weeksTotal} — Tháng ${month}/${year}`,
           PAGE_W / 2, PAGE_H - 6, { align: 'center' },
@@ -352,6 +361,40 @@ export default function SchedulesPage() {
     if (schedules.length === 0) return false
     return schedules.every(s => s.status === 'approved')
   }, [schedules])
+
+  // Quản lý ngày lễ
+  const openHolidayModal = async () => {
+    try {
+      const list = await holidayApi.list(year)
+      setHolidays(list)
+      setNewHoliday({ holidayDate: `${year}-${String(month).padStart(2,'0')}-01`, name: '', isPaid: true })
+      setShowHolidayModal(true)
+    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await holidayApi.create(newHoliday)
+      const list = await holidayApi.list(year)
+      setHolidays(list)
+      setNewHoliday({ holidayDate: `${year}-${String(month).padStart(2,'0')}-01`, name: '', isPaid: true })
+    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+  const handleDeleteHoliday = async (id: string, name: string) => {
+    if (!confirm(`Xoá ngày lễ "${name}"?`)) return
+    try {
+      await holidayApi.delete(id)
+      setHolidays(holidays.filter(h => h.id !== id))
+    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
+  const handleReapplyHolidays = async () => {
+    if (!confirm(`Áp dụng lại mã ca cho lịch tháng ${month}/${year}?\n(L thay T/C ở các ngày lễ; LC thay TC/CC; LHS thay THS/CHS)`)) return
+    try {
+      const r = await holidayApi.reapply(year, month)
+      alert(`Đã cập nhật ${r.updated}/${r.total} ca trực`)
+      load()
+    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi') }
+  }
 
   const handleDuplicate = async () => {
     const prevMonth = month === 1 ? 12 : month - 1
@@ -439,6 +482,13 @@ export default function SchedulesPage() {
             </div>
             {canEdit && (
               <>
+                {isAdmin && (
+                  <button onClick={openHolidayModal}
+                    className="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-rose-700 no-export"
+                    title="Quản lý ngày lễ — sau khi thêm bấm 'Áp dụng lại' để cập nhật ca">
+                    🎌 Ngày lễ
+                  </button>
+                )}
                 <button onClick={handleDuplicate}
                   className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-purple-700"
                   title="Sao chép lịch tháng trước">
@@ -715,6 +765,83 @@ export default function SchedulesPage() {
       </div>
 
       {/* Biểu mẫu báo đổi trực */}
+      {/* Modal quản lý ngày lễ */}
+      {showHolidayModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h2 className="text-lg font-bold text-gray-800">🎌 Quản lý ngày lễ năm {year}</h2>
+              <button onClick={()=>setShowHolidayModal(false)} className="text-gray-400 hover:text-gray-700 text-xl">✕</button>
+            </div>
+
+            <div className="px-5 py-3 overflow-y-auto flex-1">
+              <p className="text-xs text-gray-500 mb-3 italic">
+                Thêm các ngày nghỉ lễ. Sau khi thêm xong → bấm <b>"Áp dụng lại tháng này"</b> để
+                cập nhật mã ca cho lịch tháng {month}/{year}: ngày lễ sẽ chuyển từ T/C → <b>L</b>
+                (cấp cứu → <b>LC</b>, hồi sức → <b>LHS</b>).
+              </p>
+
+              <form onSubmit={handleAddHoliday} className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-3 p-3 bg-rose-50 rounded-lg border border-rose-200">
+                <input type="date" value={newHoliday.holidayDate}
+                  onChange={e=>setNewHoliday({...newHoliday, holidayDate: e.target.value})}
+                  className="md:col-span-3 border rounded px-2 py-1.5 text-sm" required/>
+                <input type="text" value={newHoliday.name}
+                  onChange={e=>setNewHoliday({...newHoliday, name: e.target.value})}
+                  placeholder="Tên ngày lễ (VD: Giỗ Tổ Hùng Vương)"
+                  className="md:col-span-7 border rounded px-2 py-1.5 text-sm" required/>
+                <button type="submit"
+                  className="md:col-span-2 bg-rose-600 text-white rounded px-3 py-1.5 text-sm font-semibold hover:bg-rose-700">
+                  + Thêm
+                </button>
+              </form>
+
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 border-b">
+                    <th className="border px-2 py-1.5 text-left font-semibold w-32">Ngày</th>
+                    <th className="border px-2 py-1.5 text-left font-semibold">Tên ngày lễ</th>
+                    <th className="border px-2 py-1.5 w-20"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {holidays.length === 0 && (
+                    <tr><td colSpan={3} className="border px-2 py-3 text-center text-gray-400 italic">
+                      Chưa có ngày lễ nào trong năm {year}
+                    </td></tr>
+                  )}
+                  {holidays.map((h:any) => {
+                    const d = new Date(h.holidayDate)
+                    return (
+                      <tr key={h.id} className="hover:bg-rose-50/30">
+                        <td className="border px-2 py-1.5 font-mono text-xs">
+                          {d.toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric', weekday:'short' })}
+                        </td>
+                        <td className="border px-2 py-1.5">{h.name}</td>
+                        <td className="border px-2 py-1.5 text-center">
+                          <button onClick={()=>handleDeleteHoliday(h.id, h.name)}
+                            className="text-red-600 hover:text-red-800 text-sm">🗑️</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-2xl">
+              <button onClick={()=>setShowHolidayModal(false)}
+                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-100">
+                Đóng
+              </button>
+              <button onClick={handleReapplyHolidays}
+                className="flex-1 bg-amber-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-amber-700">
+                ⚡ Áp dụng lại tháng {month}/{year}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSwapModal && swapTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-6">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl my-auto mx-4">
