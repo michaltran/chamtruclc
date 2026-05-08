@@ -51,9 +51,16 @@ const RECOVERY_DEPT_CODES = new Set(['GMHS']);
  * không có mã riêng (TLD/CLD/LLD đã bỏ).
  */
 async function getDefaultShiftTypeForDate(prisma: PrismaClient, date: Date, departmentCode?: string) {
-  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const isHoliday = await prisma.holiday.findUnique({ where: { holidayDate: dateOnly } });
-  const isWeekend = [0, 6].includes(date.getDay());
+  // PG @db.Date lưu UTC midnight — dùng range query để tránh lệch giờ TZ
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const d = date.getUTCDate();
+  const dStart = new Date(Date.UTC(y, m, d));
+  const dEnd = new Date(Date.UTC(y, m, d, 23, 59, 59));
+  const isHoliday = !!(await prisma.holiday.findFirst({
+    where: { holidayDate: { gte: dStart, lte: dEnd } },
+  }));
+  const isWeekend = [0, 6].includes(dStart.getUTCDay());
   const isEmerg = !!departmentCode && EMERGENCY_DEPT_CODES.has(departmentCode);
   const isRecov = !!departmentCode && RECOVERY_DEPT_CODES.has(departmentCode);
 

@@ -61,6 +61,7 @@ export default function SchedulesPage() {
   const [form, setForm] = useState<{ userId:string; departmentId:string; shiftTypeId:string; shiftDate:string; note:string; colType:'BS'|'DD'|'ALL' }>({ userId:'', departmentId:'', shiftTypeId:'', shiftDate:'', note:'', colType:'ALL' })
   const [viewMode, setViewMode] = useState<'week'|'month'>('week')
   const [lockedDepts, setLockedDepts] = useState<Set<string>>(new Set())
+  const [userSearch, setUserSearch] = useState('')
   const [showHolidayModal, setShowHolidayModal] = useState(false)
   const [holidays, setHolidays] = useState<any[]>([])
   const [newHoliday, setNewHoliday] = useState({ holidayDate: '', name: '', isPaid: true })
@@ -207,8 +208,23 @@ export default function SchedulesPage() {
   const openAddForm = (deptId: string, date: string, colType: 'BS'|'DD'|'ALL' = 'ALL') => {
     setSelectedCell({deptId, date})
     setForm({userId:'', departmentId:deptId, shiftTypeId:'', shiftDate:date, note:'', colType})
+    setUserSearch('')
     setShowForm(true)
   }
+
+  // Helper: bỏ dấu tiếng Việt để search dễ hơn
+  const removeDiacritics = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase()
+
+  const searchedUsers = useMemo(() => {
+    if (!userSearch.trim()) return filteredUsersForForm
+    const q = removeDiacritics(userSearch.trim())
+    return filteredUsersForForm.filter((u: any) => {
+      const name = removeDiacritics(u.fullName || '')
+      const code = removeDiacritics(u.employeeCode || '')
+      const title = removeDiacritics(u.title || '')
+      return name.includes(q) || code.includes(q) || title.includes(q)
+    })
+  }, [filteredUsersForForm, userSearch])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1064,14 +1080,57 @@ export default function SchedulesPage() {
                   {form.colType === 'BS' && <span className="text-blue-600 ml-1 text-xs">(chỉ Bác sĩ/Lãnh đạo)</span>}
                   {form.colType === 'DD' && <span className="text-emerald-600 ml-1 text-xs">(chỉ ĐD/HS/KTV/Hộ lý)</span>}
                 </label>
-                <select value={form.userId} onChange={e=>setForm({...form,userId:e.target.value})}
-                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required>
-                  <option value="">Chọn nhân viên</option>
-                  {filteredUsersForForm.length === 0 && form.departmentId && (
-                    <option value="" disabled>Không có nhân viên phù hợp</option>
-                  )}
-                  {filteredUsersForForm.map(u=><option key={u.id} value={u.id}>{u.fullName} {u.title?`(${u.title})`:''}</option>)}
-                </select>
+                {/* Combobox: gõ tìm + danh sách lọc real-time */}
+                <input type="text" value={userSearch}
+                  onChange={e=>{setUserSearch(e.target.value); if (form.userId) setForm({...form, userId:''})}}
+                  placeholder="🔍 Gõ tên / mã NV / chức danh để tìm..."
+                  className="w-full border rounded-lg px-3 py-2 mt-1 text-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-500"
+                  autoFocus/>
+                {form.userId ? (
+                  <div className="mt-2 px-3 py-2 bg-green-50 border border-green-300 rounded-lg flex items-center justify-between">
+                    <span className="text-sm font-semibold text-green-800">
+                      ✓ {filteredUsersForForm.find(u=>u.id===form.userId)?.fullName}
+                      <span className="text-green-600 font-normal ml-2 text-xs">
+                        {filteredUsersForForm.find(u=>u.id===form.userId)?.title || ''}
+                      </span>
+                    </span>
+                    <button type="button" onClick={()=>{setForm({...form,userId:''}); setUserSearch('')}}
+                      className="text-green-700 hover:text-red-600 text-xs">✕ đổi</button>
+                  </div>
+                ) : (
+                  <div className="mt-1 border border-gray-200 rounded-lg max-h-56 overflow-y-auto bg-white">
+                    {searchedUsers.length === 0 ? (
+                      <div className="px-3 py-3 text-sm text-gray-400 italic text-center">
+                        {form.departmentId ? 'Không có nhân viên phù hợp' : 'Chọn khoa trước'}
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {searchedUsers.slice(0, 50).map((u:any) => (
+                          <li key={u.id}>
+                            <button type="button"
+                              onClick={()=>{setForm({...form,userId:u.id}); setUserSearch('')}}
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between">
+                              <span className="font-medium text-gray-800">{u.fullName}</span>
+                              <span className="text-xs text-gray-500">
+                                {u.employeeCode && <span className="font-mono mr-2">{u.employeeCode}</span>}
+                                {u.title}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                        {searchedUsers.length > 50 && (
+                          <li className="px-3 py-1.5 text-xs text-gray-400 italic text-center bg-gray-50">
+                            ...và {searchedUsers.length - 50} người khác (gõ thêm để lọc)
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {/* Hidden để form validation phát hiện required */}
+                <input type="text" value={form.userId} onChange={()=>{}} required
+                  tabIndex={-1} aria-hidden
+                  className="absolute opacity-0 w-0 h-0 pointer-events-none"/>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Khoa/Phòng trực</label>
