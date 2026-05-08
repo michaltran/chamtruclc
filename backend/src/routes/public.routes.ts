@@ -33,7 +33,8 @@ router.get('/schedules', async (req, res) => {
       department: { select: { id: true, name: true, code: true } },
       shiftType: { select: { code: true, name: true } },
     },
-    orderBy: [{ shiftDate: 'asc' }],
+    // Giữ thứ tự nhập: ai phân ca trước hiện trước trong cùng ô
+    orderBy: [{ shiftDate: 'asc' }, { createdAt: 'asc' }],
   });
 
   // Cũng trả về danh sách khoa (đã sort) để render trên trang public

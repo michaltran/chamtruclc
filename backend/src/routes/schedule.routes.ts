@@ -157,7 +157,8 @@ router.get('/', authenticate, async (req, res) => {
       department: { select: { id: true, name: true, code: true } },
       shiftType: true,
     },
-    orderBy: [{ shiftDate: 'asc' }, { shiftType: { startTime: 'asc' } }],
+    // Trong cùng 1 ô (date+dept+shiftType), giữ thứ tự nhập: ai nhập trước hiện trước
+    orderBy: [{ shiftDate: 'asc' }, { shiftType: { startTime: 'asc' } }, { createdAt: 'asc' }],
   });
 
   res.json(schedules);
