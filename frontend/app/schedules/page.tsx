@@ -295,6 +295,25 @@ export default function SchedulesPage() {
         (lastWeekStart.getTime() - baseWeek.getTime()) / (7 * 24 * 60 * 60 * 1000)
       ) + 1
 
+      // Inject CSS Times New Roman 1 lần cho cả vòng lặp
+      const styleEl = document.createElement('style')
+      styleEl.id = 'sched-export-font-style'
+      styleEl.textContent = `
+        #schedule-export-area,
+        #schedule-export-area *,
+        #schedule-export-area table,
+        #schedule-export-area td,
+        #schedule-export-area th,
+        #schedule-export-area div,
+        #schedule-export-area span,
+        #schedule-export-area p,
+        #schedule-export-area h1,
+        #schedule-export-area h2 {
+          font-family: "Times New Roman", Times, serif !important;
+        }
+      `
+      document.head.appendChild(styleEl)
+
       let pageAdded = 0
       for (let w = 0; w < weeksTotal; w++) {
         setWeekOffset(w)
@@ -302,10 +321,8 @@ export default function SchedulesPage() {
         await new Promise(r => setTimeout(r, 250))
         const node = document.getElementById('schedule-export-area')
         if (!node) continue
-
-        // Tạm set font Times New Roman cho khu vực được capture
-        const prevFont = node.style.fontFamily
-        node.style.fontFamily = '"Times New Roman", Times, serif'
+        // Force reflow để font apply trước khi capture
+        void node.offsetHeight
 
         const canvas = await html2canvas(node, {
           scale: 2,
@@ -314,8 +331,6 @@ export default function SchedulesPage() {
           windowHeight: node.scrollHeight,
           ignoreElements: (el) => el.classList?.contains('no-export'),
         })
-        // Khôi phục font
-        node.style.fontFamily = prevFont
 
         if (pageAdded > 0) pdf.addPage()
         pageAdded++
@@ -351,6 +366,9 @@ export default function SchedulesPage() {
     } catch (err: any) {
       alert('Lỗi xuất PDF: ' + (err?.message || err))
     } finally {
+      // Cleanup style font đã inject
+      const s = document.getElementById('sched-export-font-style')
+      if (s) s.remove()
       setWeekOffset(savedOffset)
       setExporting(false)
     }

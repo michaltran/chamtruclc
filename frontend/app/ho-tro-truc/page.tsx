@@ -332,9 +332,24 @@ export default function HoTroTrucPage() {
       const CONTENT_W = PAGE_W - 2 * MARGIN
       const CONTENT_H = PAGE_H - 2 * MARGIN
 
-      // Capture each section separately — set font Times New Roman trên export area
-      const prevFont = node.style.fontFamily
-      node.style.fontFamily = '"Times New Roman", Times, serif'
+      // Inject CSS Times New Roman cho export area (override Tailwind/inherit)
+      const styleEl = document.createElement('style')
+      styleEl.id = 'htt-export-font-style'
+      styleEl.textContent = `
+        #htt-export-area,
+        #htt-export-area *,
+        #htt-export-area table,
+        #htt-export-area td,
+        #htt-export-area th,
+        #htt-export-area div,
+        #htt-export-area span,
+        #htt-export-area p {
+          font-family: "Times New Roman", Times, serif !important;
+        }
+      `
+      document.head.appendChild(styleEl)
+      // Force browser reflow
+      void node.offsetHeight
 
       const sections = node.querySelectorAll('.htt-section')
       let pageIdx = 0
@@ -359,13 +374,14 @@ export default function HoTroTrucPage() {
           offsetX, offsetY, drawW, drawH, undefined, 'FAST')
       }
 
-      // Khôi phục font
-      node.style.fontFamily = prevFont
       pdf.save(`ho-tro-truc-${month}-${year}.pdf`)
     } catch (err: any) {
       console.error('[PDF export]', err)
       alert('Lỗi xuất PDF: ' + (err?.message || err))
     } finally {
+      // Đảm bảo gỡ style dù có lỗi
+      const s = document.getElementById('htt-export-font-style')
+      if (s) s.remove()
       setExporting(false)
     }
   }
