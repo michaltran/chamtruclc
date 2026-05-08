@@ -406,9 +406,6 @@ export default function UsersPage() {
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-3 italic">
-              Người dùng chỉ thấy các trang được tích trong menu sau khi đăng nhập lại.
-            </p>
             <div className="flex gap-2 mt-4">
               <button onClick={()=>setPermModal(null)} className="flex-1 border py-2 rounded-lg text-sm">Hủy</button>
               <button onClick={savePerm} className="flex-1 bg-purple-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-purple-700">Lưu quyền</button>

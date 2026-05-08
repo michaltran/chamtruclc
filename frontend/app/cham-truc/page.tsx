@@ -946,9 +946,6 @@ export default function ChamTrucPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-4 py-2 text-[10px] text-gray-500 italic">
-                    * Tổng cộng Lãnh đạo được hiển thị riêng trong bảng "Trực Lãnh đạo" phía trên.
-                  </div>
                 </div>
               )
             })()}

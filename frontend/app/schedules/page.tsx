@@ -758,7 +758,6 @@ export default function SchedulesPage() {
               <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-green-100 border border-green-200 rounded inline-block"/>Điều dưỡng/Hộ sinh/KTV</span>
               <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-amber-100 border border-amber-300 rounded inline-block"/>Lãnh đạo</span>
               <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-orange-50 border border-orange-200 rounded inline-block"/>Cuối tuần</span>
-              <span className="text-gray-400 text-xs italic">— Di chuột vào ô để hiện nút sửa/xóa, dấu + để thêm ca</span>
             </div>
           </div>
         ) : (
@@ -810,12 +809,6 @@ export default function SchedulesPage() {
             </div>
 
             <div className="px-5 py-3 overflow-y-auto flex-1">
-              <p className="text-xs text-gray-500 mb-3 italic">
-                Thêm các ngày nghỉ lễ. Hệ thống <b>tự động cập nhật mã ca</b> cho mọi lịch trực
-                vào ngày đó: T/C → <b>L</b>, TC/CC → <b>LC</b>, THS/CHS → <b>LHS</b>.
-                Khi xoá ngày lễ, mã ca cũng tự về T/C tương ứng.
-              </p>
-
               <form onSubmit={handleAddHoliday} className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-3 p-3 bg-rose-50 rounded-lg border border-rose-200">
                 <input type="date" value={newHoliday.holidayDate}
                   onChange={e=>setNewHoliday({...newHoliday, holidayDate: e.target.value})}
@@ -1141,19 +1134,12 @@ export default function SchedulesPage() {
                   {visibleDepartments
                     .map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-                {allowedDeptIds && allowedDeptIds.size === 1 && (
-                  <p className="text-[10px] text-gray-400 mt-1 italic">Bạn chỉ được nhập lịch cho khoa đã phân quyền.</p>
-                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Ngày trực</label>
                 <input type="date" value={form.shiftDate} onChange={e=>setForm({...form,shiftDate:e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 mt-1 text-sm" required/>
               </div>
-              <p className="text-xs text-gray-500 italic">
-                💡 Mã ca trực sẽ tự động xác định theo (khoa + ngày): T/C/L cho ca thường,
-                TC/CC/LC cho cấp cứu, THS/CHS/LHS cho hồi sức.
-              </p>
               <div>
                 <label className="text-sm font-medium text-gray-700">Ghi chú</label>
                 <input type="text" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}
