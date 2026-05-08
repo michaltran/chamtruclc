@@ -483,7 +483,7 @@ export default function ChamTrucPage() {
           ccTotal || '', normTotal || '', hsTotal || '', grand || '',
         ]
         // Format
-        row.eachCell((cell, colNumber) => {
+        row.eachCell((cell: any, colNumber: number) => {
           cell.border = border
           cell.alignment = { horizontal: 'center', vertical: 'middle' }
           if (colNumber === 2) {
@@ -541,7 +541,7 @@ export default function ChamTrucPage() {
         ccTot || '', noTot || '', hsTot || '', (ccTot + noTot + hsTot) || '',
       ]
       ws.mergeCells(cur, 2, cur, 3)
-      totalRow.eachCell(cell => {
+      totalRow.eachCell((cell: any) => {
         cell.border = border
         cell.font = { bold: true, size: 11 }
         cell.fill = isLd ? fill('FFFEF3C7') : fill('FFE5E7EB')
