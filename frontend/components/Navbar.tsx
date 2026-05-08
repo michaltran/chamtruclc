@@ -16,7 +16,7 @@ export default function Navbar() {
 
   // Pages cấp cho user, fallback theo role nếu chưa có
   const defaultPagesByRole: Record<string, string[]> = {
-    admin: ['schedules','swaps','cham-truc','users','departments'],
+    admin: ['schedules','swaps','cham-truc','ho-tro-truc','users','departments'],
     department_lead: ['schedules','swaps','users'],
     staff: ['schedules','swaps'],
   }
@@ -26,6 +26,7 @@ export default function Navbar() {
     { href: '/schedules',   key: 'schedules',   label: 'Lịch Trực' },
     { href: '/swaps',       key: 'swaps',       label: 'Đổi Trực' },
     { href: '/cham-truc',   key: 'cham-truc',   label: 'Chấm Trực' },
+    { href: '/ho-tro-truc', key: 'ho-tro-truc', label: 'Hỗ trợ trực' },
     { href: '/users',       key: 'users',       label: 'Nhân viên' },
     { href: '/departments', key: 'departments', label: 'Khoa/Phòng' },
   ]

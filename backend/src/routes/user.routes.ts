@@ -72,7 +72,7 @@ router.get('/', authenticate, async (req, res) => {
   })));
 });
 
-const ALL_PAGES = ['schedules','swaps','cham-truc','users','departments'] as const;
+const ALL_PAGES = ['schedules','swaps','cham-truc','ho-tro-truc','users','departments'] as const;
 
 /**
  * PUT /api/users/:id/permissions (admin only)
