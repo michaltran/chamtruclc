@@ -178,9 +178,29 @@ export default function ChamTrucPage() {
   // EXCEL EXPORT — xuất bảng chấm trực với format đẹp (ExcelJS)
   // Layout giống form trên web: 9 cột mã ca, 4 cột tổng, header bệnh viện
   // ============================================================
+  // Load ExcelJS từ CDN (tránh issue webpack/Next.js polyfill cho stream/buffer)
+  const loadExcelJS = (): Promise<any> => new Promise((resolve, reject) => {
+    if ((window as any).ExcelJS) return resolve((window as any).ExcelJS)
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
+    s.onload = () => resolve((window as any).ExcelJS)
+    s.onerror = () => reject(new Error('Không tải được ExcelJS từ CDN'))
+    document.head.appendChild(s)
+  })
+
   const handleExportExcel = async () => {
-    const ExcelJS = (await import('exceljs')).default
-    const { saveAs } = await import('file-saver')
+    let ExcelJS: any
+    try {
+      ExcelJS = await loadExcelJS()
+      if (!ExcelJS?.Workbook) {
+        alert('Không nạp được thư viện ExcelJS. Hãy F5 lại trang.')
+        return
+      }
+    } catch (err: any) {
+      alert('Lỗi nạp thư viện: ' + (err?.message || err))
+      return
+    }
+    const saveAs: any = null  // dùng fallback download thủ công bên dưới
 
     // === Build groups (replicate logic render) ===
     const allDepts = filterDept ? departments.filter(d => d.id === filterDept) : departments
@@ -533,9 +553,26 @@ export default function ChamTrucPage() {
     })
 
     // Save
-    const buf = await wb.xlsx.writeBuffer()
-    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      `bang-cham-truc-${month}-${year}.xlsx`)
+    try {
+      const buf = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      if (typeof saveAs === 'function') {
+        saveAs(blob, `bang-cham-truc-${month}-${year}.xlsx`)
+      } else {
+        // Fallback: tạo link download thủ công
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `bang-cham-truc-${month}-${year}.xlsx`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+      }
+    } catch (err: any) {
+      console.error('[Excel export]', err)
+      alert('Lỗi xuất Excel: ' + (err?.message || err))
+    }
   }
 
   return (

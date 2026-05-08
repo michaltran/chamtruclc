@@ -106,17 +106,38 @@ export default function SchedulesPage() {
     userApi.list().then(setUsers).catch(()=>{})
   }, [user])
 
-  // Memoize derived values — these were re-computed on every render before
-  // Multi-dept aware: include user if any of their departmentIds matches.
+  // Family mapping: cùng họ thì được trực chéo
+  // VD: SAM (siêu âm) ↔ CT ↔ XQUANG ↔ CDHA — đều thuộc họ "CDHA"
+  //     NGOAI ↔ CC-NGOAI — đều thuộc họ "NGOAI"
+  //     SAN ↔ CC-SAN, HL ↔ HL-CC
+  const PARENT_OF: Record<string, string> = {
+    'CC-NGOAI': 'NGOAI', 'CC-SAN': 'SAN', 'HL-CC': 'HL',
+    'SAM': 'CDHA', 'CT': 'CDHA', 'XQUANG': 'CDHA',
+  }
+  const getFamilyCode = (code?: string) => code ? (PARENT_OF[code] || code) : undefined
+
+  // Memoize derived values
   // Loại admin (quản lý) — admin không trực nên không hiện trong dropdown chọn người trực.
+  // Cho phép user thuộc sub-dept (SAM) trực ở sub-dept khác cùng cha (CT/XQUANG).
   const filteredUsersForForm = useMemo(() => {
     const eligible = users.filter((u: any) => u.role !== 'admin')
     if (!form.departmentId) return eligible
+    const formCode = departments.find(d => d.id === form.departmentId)?.code
+    const formFamily = getFamilyCode(formCode)
     return eligible.filter((u: any) => {
-      if (u.departmentIds && u.departmentIds.length > 0) return u.departmentIds.includes(form.departmentId)
-      return u.departmentId === form.departmentId
+      const ids: string[] = (u.departmentIds && u.departmentIds.length > 0)
+        ? u.departmentIds
+        : (u.departmentId ? [u.departmentId] : [])
+      // Trực tiếp thuộc khoa đang chọn
+      if (ids.includes(form.departmentId)) return true
+      // Hoặc thuộc 1 khoa cùng họ (parent/sibling)
+      const userFamilies = new Set(ids
+        .map(id => departments.find(d => d.id === id)?.code)
+        .filter(Boolean)
+        .map(c => getFamilyCode(c as string)))
+      return formFamily ? userFamilies.has(formFamily) : false
     })
-  }, [users, form.departmentId])
+  }, [users, form.departmentId, departments])
 
   // Khoa được phép cho dept_lead — null nếu admin/staff hoặc dept_lead chưa được gán khoa.
   // Nếu user.role là department_lead nhưng không có khoa nào → null (cho thấy tất cả khoa, backend cũng có check)
