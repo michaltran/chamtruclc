@@ -122,13 +122,19 @@ router.get('/', authenticate, async (req, res) => {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  // Department lead chỉ xem khoa mình; admin xem tất cả
+  // Department lead xem khoa mình + tất cả khoa con (CDHA → SAM/CT/XQUANG, NGOAI → CC-NGOAI...)
+  // Admin xem tất cả
   const where: any = {
     shiftDate: { gte: startDate, lte: endDate },
   };
 
   if (req.user!.role === 'department_lead') {
-    where.departmentId = req.user!.departmentId;
+    const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    if (allowedIds && allowedIds.size > 0) {
+      where.departmentId = { in: Array.from(allowedIds) };
+    } else {
+      where.departmentId = req.user!.departmentId; // fallback
+    }
   } else if (departmentId) {
     where.departmentId = departmentId;
   }
@@ -491,8 +497,16 @@ router.get('/lock-status', authenticate, async (req, res) => {
     shiftDate: { gte: startDate, lte: endDate },
     status: { in: ['submitted', 'approved'] },
   };
-  if (req.query.departmentId) where.departmentId = req.query.departmentId as string;
-  else if (req.user!.role === 'department_lead') where.departmentId = req.user!.departmentId!;
+  if (req.query.departmentId) {
+    where.departmentId = req.query.departmentId as string;
+  } else if (req.user!.role === 'department_lead') {
+    const allowedIds = await getAccessibleDeptIds(prisma, req.user!.id, req.user!.role);
+    if (allowedIds && allowedIds.size > 0) {
+      where.departmentId = { in: Array.from(allowedIds) };
+    } else {
+      where.departmentId = req.user!.departmentId!;
+    }
+  }
 
   const counts = await prisma.schedule.groupBy({
     by: ['departmentId', 'status'],
