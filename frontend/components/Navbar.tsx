@@ -20,7 +20,10 @@ export default function Navbar() {
     department_lead: ['schedules','swaps','users'],
     staff: ['schedules','swaps'],
   }
-  const allowedPages: string[] = user?.pages || defaultPagesByRole[user?.role] || ['schedules']
+  // Admin LUÔN thấy tất cả link (bỏ qua user.pages cũ có thể outdated)
+  const allowedPages: string[] = user?.role === 'admin'
+    ? defaultPagesByRole.admin
+    : (user?.pages || defaultPagesByRole[user?.role] || ['schedules'])
 
   const allLinks = [
     { href: '/schedules',   key: 'schedules',   label: 'Lịch Trực' },

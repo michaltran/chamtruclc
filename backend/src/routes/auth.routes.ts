@@ -77,14 +77,17 @@ router.post('/login', async (req, res) => {
     },
   });
 
-  // Default pages by role for users without explicit permissions
+  // Default pages by role for users without explicit permissions.
+  // Admin: bỏ qua UserPermission cũ — luôn được full quyền (tránh trường hợp DB lưu pages cũ thiếu trang mới).
   const perm = await prisma.userPermission.findUnique({ where: { userId: user.id } });
   const defaultPagesByRole: Record<string, string[]> = {
     admin: ['schedules','swaps','cham-truc','ho-tro-truc','users','departments'],
     department_lead: ['schedules','swaps','users'],
     staff: ['schedules','swaps'],
   };
-  const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
+  const pages = user.role === 'admin'
+    ? defaultPagesByRole.admin
+    : ((perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules']);
 
   const userDepts = user.userDepartments.map(ud => ({
     ...ud.department,
@@ -131,7 +134,9 @@ router.get('/me', authenticate, async (req, res) => {
     department_lead: ['schedules','swaps','users'],
     staff: ['schedules','swaps'],
   };
-  const pages = (perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules'];
+  const pages = user.role === 'admin'
+    ? defaultPagesByRole.admin
+    : ((perm?.pages as string[] | undefined) || defaultPagesByRole[user.role] || ['schedules']);
   const departments = user.userDepartments.map(ud => ({ ...ud.department, isPrimary: ud.isPrimary }));
   const departmentIds = user.userDepartments.map(ud => ud.departmentId);
   const finalDeptIds = departmentIds.length === 0 && user.departmentId ? [user.departmentId] : departmentIds;
