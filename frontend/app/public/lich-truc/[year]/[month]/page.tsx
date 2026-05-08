@@ -66,98 +66,6 @@ export default function PublicSchedulePage() {
   }, [year, month, weekOffset])
 
   const todayStr = format(new Date(), 'yyyy-MM-dd')
-  const [exporting, setExporting] = useState(false)
-
-  // Xuất PNG tuần đang xem (1 ảnh A4 ngang lề 1.5cm)
-  const handleExportImagePng = async () => {
-    if (exporting) return
-    setExporting(true)
-    try {
-      const html2canvas = (await import('html2canvas')).default
-      const node = document.getElementById('public-export-area')
-      if (!node) return
-      const src = await html2canvas(node, {
-        scale: 2, backgroundColor: '#ffffff',
-        windowWidth: Math.max(node.scrollWidth, 1600),
-        windowHeight: node.scrollHeight,
-        ignoreElements: el => el.classList?.contains('no-export'),
-      })
-      // A4 ngang ở 200 DPI: 297×210mm
-      const PX_PER_MM = 200 / 25.4
-      const A4_W = Math.round(297 * PX_PER_MM)
-      const A4_H = Math.round(210 * PX_PER_MM)
-      const MARGIN = Math.round(15 * PX_PER_MM)
-      const CW = A4_W - MARGIN * 2
-      const CH = A4_H - MARGIN * 2
-      const scale = Math.min(CW / src.width, CH / src.height)
-      const drawW = src.width * scale
-      const drawH = src.height * scale
-      const out = document.createElement('canvas')
-      out.width = A4_W; out.height = A4_H
-      const ctx = out.getContext('2d')!
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, A4_W, A4_H)
-      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(src, MARGIN + (CW - drawW) / 2, MARGIN + (CH - drawH) / 2, drawW, drawH)
-      const a = document.createElement('a')
-      a.href = out.toDataURL('image/png', 1.0)
-      a.download = `lich-truc-tuan-${weekOffset + 1}-thang-${month}-${year}.png`
-      a.click()
-    } catch (err: any) {
-      alert('Lỗi xuất ảnh: ' + (err?.message || err))
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  // Xuất PDF cả tháng (mỗi tuần 1 trang A4 ngang)
-  const handleExportPdf = async () => {
-    if (exporting) return
-    setExporting(true)
-    const savedOffset = weekOffset
-    try {
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'), import('jspdf'),
-      ])
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const PAGE_W = 297, PAGE_H = 210, MARGIN = 15
-      const CW = PAGE_W - 2 * MARGIN, CH = PAGE_H - 2 * MARGIN
-      const firstOfMonth = new Date(year, month - 1, 1)
-      const baseWeek = startOfWeek(firstOfMonth, { weekStartsOn: 1 })
-      const lastDay = new Date(year, month, 0)
-      const lastWeekStart = startOfWeek(lastDay, { weekStartsOn: 1 })
-      const weeksTotal = Math.round((lastWeekStart.getTime() - baseWeek.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
-
-      let pageAdded = 0
-      for (let w = 0; w < weeksTotal; w++) {
-        setWeekOffset(w)
-        await new Promise(r => setTimeout(r, 250))
-        const node = document.getElementById('public-export-area')
-        if (!node) continue
-        const canvas = await html2canvas(node, {
-          scale: 2, backgroundColor: '#fff',
-          windowWidth: Math.max(node.scrollWidth, 1600),
-          windowHeight: node.scrollHeight,
-          ignoreElements: el => el.classList?.contains('no-export'),
-        })
-        if (pageAdded > 0) pdf.addPage()
-        pageAdded++
-        const ratio = canvas.width / canvas.height
-        let dW = CW, dH = dW / ratio
-        if (dH > CH) { dH = CH; dW = dH * ratio }
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG',
-          MARGIN + (CW - dW) / 2, MARGIN + (CH - dH) / 2, dW, dH, undefined, 'FAST')
-        pdf.setFontSize(8).setTextColor(120)
-        pdf.text(`Tuần ${w + 1}/${weeksTotal} — Tháng ${month}/${year}`,
-          PAGE_W / 2, PAGE_H - 6, { align: 'center' })
-      }
-      pdf.save(`lich-truc-thang-${month}-${year}.pdf`)
-    } catch (err: any) {
-      alert('Lỗi xuất PDF: ' + (err?.message || err))
-    } finally {
-      setWeekOffset(savedOffset)
-      setExporting(false)
-    }
-  }
 
   const schedMap = useMemo(() => {
     if (!data) return {} as Record<string, Record<string, { bs:any[]; dd:any[] }>>
@@ -222,14 +130,6 @@ export default function PublicSchedulePage() {
             <span className="ml-3 text-gray-400 text-sm font-medium">— Tuần {weekOffset+1}</span>
           </span>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={handleExportImagePng} disabled={exporting}
-              className="bg-emerald-600 text-white text-sm px-3 py-1.5 rounded font-semibold hover:bg-emerald-700 disabled:opacity-50">
-              {exporting ? '⏳' : '🖼️'} Xuất ảnh tuần
-            </button>
-            <button onClick={handleExportPdf} disabled={exporting}
-              className="bg-red-600 text-white text-sm px-3 py-1.5 rounded font-semibold hover:bg-red-700 disabled:opacity-50">
-              {exporting ? '⏳' : '📄'} Xuất PDF cả tháng
-            </button>
             <button onClick={()=>window.print()} className="text-sm text-gray-600 hover:text-blue-600 px-3 py-1.5 rounded hover:bg-blue-50">🖨️ In</button>
             <button onClick={()=>setWeekOffset(w=>Math.min(maxWeekOffset,w+1))}
               className="text-gray-700 hover:text-blue-600 text-base font-bold px-3 py-1.5 rounded hover:bg-blue-50 transition-colors">
